@@ -115,7 +115,7 @@ where $\vec{r}_M$ is the position of the metal and $\vec{r}_i$ are the position 
 | ✔️ | Centorid search for pi-bonded ligands. *Doesn't work with ligands outside ASU.                                           |
 | WIP | Custom reference shapes.                                                                                                 | 
 | ✔️ | Smarter program logic (automatic coordination site detection, multiple selections, etc.).                                | 
-| ❌ | Support for other measurement programs (Polynator, Continuous Symmetry Operations, etc.).                                |
+| WIP | Support for other measurement programs (Polynator, Continuous Symmetry Operations, etc.).                                |
 | ✔️ | Reimplementation of octahedral distortion parameters (Zeta, Sigma, Theta) — relevant for spin-crossover (SCO) complexes. |
 | ✔️ | Non centered shapes.                                                                                                     |
 | ✔️ | HTML UI.                                                                                                                 |
