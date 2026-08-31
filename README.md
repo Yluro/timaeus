@@ -69,7 +69,7 @@ The Octahedral Distortion Parameters module computes all distortion parameters r
 where $d_i$ are the M-X bond distances and $d_{mean}$ is the mean M-X bond distance.
 - Octahedral tilting parameter:
 ```math
-\Delta = \sum_{i=1}^6 \left(\frac{d_i - d_{mean}}{d_{mean}}\right)^2
+\Delta = \frac{1}{6}\sum_{i=1}^6 \left(\frac{d_i - d_{mean}}{d_{mean}}\right)^2
 ```
 where $d_i$ are the M-X bond distances and $d_{mean}$ is the mean M-X bond distance.
 - Cis angle distortion:
