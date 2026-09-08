@@ -147,3 +147,14 @@ def test_selection_class():
     print('Splitting in parts.')
     for p in split_by_parts(selection):
         print(f'{p.coords}\n{p.labels}')
+
+
+def as_bool(value) -> bool:
+    """Normalises the assorted true/false spellings that reach us from the GUI.
+
+    Olex2 hands checkbox state back as a string, while a phil bool comes back as a
+    real bool, so both have to be accepted at every param read.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() in ('true', '1', 'yes', 'on')
+    return bool(value)
