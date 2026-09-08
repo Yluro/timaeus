@@ -1,25 +1,55 @@
-from helper_functions import *
+"""Turning an Olex2 selection into something the measurement backends can consume."""
 from typing import List
 
-class MolecularStructure: # The mere purpose of this class is to hold a strucutre to pass onto SHAPE and Octadist
+from helper_functions import (get_id_from_label, get_label_from_id, get_neighbours,
+                              get_orm_atoms, get_part, get_xyz)
+
+
+class MolecularStructure:
+    """A set of labelled atoms handed to SHAPE / OctaDist / cosmochlore.
+
+    When the structure is centered the central atom is at index 0.
+    `coords` is always a list of (x, y, z) float tuples in orthogonal
+    coordinates, one per entry in `labels`.
+    """
+
     def __init__(self, coords, labels):
-        self.coords = coords
-        self.labels = labels
+        self.coords = [tuple(float(c) for c in xyz) for xyz in coords]
+        self.labels = [str(label) for label in labels]
+
+        if len(self.coords) != len(self.labels):
+            raise ValueError(f'Malformed structure: {len(self.labels)} labels '
+                             f'but {len(self.coords)} coordinates.')
+
+    def __len__(self):
+        return len(self.labels)
 
 
 class AtomSelection:
-    def __init__(self, selection_string):
+    """The current Olex2 selection, and the operations that grow or reshape it.
 
-        self.labels = selection_string.split(' ')
-        self.clean_labels = [label.split('_$')[0] for label in self.labels]
-        self.tags = [get_id_from_label(label) for label in self.labels]
-        self.coords = [get_xyz(idx) for idx in self.tags]
-        self.parts = [get_part(idx) for idx in self.tags]
-        self.orm_atoms = olexex.OlexRefinementModel().atoms()
+    `labels` holds the labels as Olex2 reports them, so entries taken straight
+    from the selection may carry a symmetry suffix (N2_$1) while entries added
+    by add_neighbours() are plain ORM labels. `tags`, `coords` and `parts` are
+    always parallel to `labels`; every method here keeps all four in step.
+    """
+
+    def __init__(self, selection_string):
+        self.orm_atoms = get_orm_atoms()
+
+        self.labels = selection_string.split(' ') if selection_string else []
+        self.tags = [get_id_from_label(label, self.orm_atoms) for label in self.labels]
+        self.coords = [get_xyz(tag) for tag in self.tags]
+        self.parts = [get_part(tag) for tag in self.tags]
+
+    def __len__(self):
+        return len(self.labels)
 
     def add_neighbours(self):
+        """Appends the atoms bonded to each currently selected atom."""
         if not self.labels:
             print("Could not find neighbours. Selection is empty.")
+            return
 
         for sel_label in self.labels.copy():
             neighbour_tags = next((atom['neighbours']
@@ -27,182 +57,178 @@ class AtomSelection:
                                    if atom['label'] == sel_label),
                                   None)
 
-            if neighbour_tags is None:
+            if not neighbour_tags:
                 print(f'Could not find neighbours for {sel_label}.')
+                continue
 
             unique_neighbours = []
             for neighbour_tag in neighbour_tags:
                 if neighbour_tag not in unique_neighbours:
                     unique_neighbours.append(neighbour_tag)
 
-            for neighbour_tag in unique_neighbours:
-                if type(neighbour_tag) == tuple:
-                    nei_label = get_label_from_id(neighbour_tag[0])
-                    coord = neighbour_tag[1]
-                    part = get_part(neighbour_tag[0])
-
-                    self.labels.append(nei_label)
-                    self.tags.append(nei_label[0])
-                    self.coords.append(coord)
-                    self.parts.append(part)
-
-                    pass
+            for neighbour in unique_neighbours:
+                # A neighbour outside the ASU arrives as a tuple that already carries
+                # the coordinates of its symmetry-generated image; one inside the ASU
+                # is a bare tag whose coordinates we look up.
+                if isinstance(neighbour, tuple):
+                    tag = neighbour[0]
+                    coord = tuple(float(c) for c in neighbour[1])
                 else:
-                    nei_label = get_label_from_id(neighbour_tag)
-                    coord = get_xyz(neighbour_tag)
-                    part = get_part(neighbour_tag)
+                    tag = neighbour
+                    coord = get_xyz(neighbour)
 
-                    self.labels.append(nei_label)
-                    self.tags.append(neighbour_tag)
-                    self.coords.append(coord)
-                    self.parts.append(part)
+                self.labels.append(get_label_from_id(tag, self.orm_atoms))
+                self.tags.append(tag)
+                self.coords.append(coord)
+                self.parts.append(get_part(tag))
 
-    def remove_duplicates(self):
-        unique_labels = []
-        unique_tags = []
-        unique_coords = []
-        unique_parts = []
+    def remove_duplicates(self, tolerance: int = 4):
+        """Drops atoms that sit on a coordinate already present in the selection.
 
-        for label, tag, coord, part in zip(self.labels, self.tags, self.coords, self.parts):
-            if label not in unique_labels:
-                unique_labels.append(label)
-                unique_tags.append(tag)
-                unique_coords.append(coord)
-                unique_parts.append(part)
+        Keyed on position rather than label: two symmetry-generated images share an
+        ORM label but are distinct atoms, so a label-based test would discard real
+        vertices.
+        """
+        seen = set()
+        keep = []
+        for i, coord in enumerate(self.coords):
+            key = tuple(round(c, tolerance) for c in coord)
+            if key in seen:
+                continue
+            seen.add(key)
+            keep.append(i)
 
-        self.labels = unique_labels
-        self.tags = unique_tags
-        self.coords = unique_coords
-        self.parts = unique_parts
+        self._keep_indices(keep)
 
     def merge_ligands(self):
+        """Collapses each set of mutually bonded ligands into a single centroid.
+
+        Used for pi-bonded ligands, where the coordination polyhedron should see the
+        centroid of the bonded fragment rather than each of its atoms. Returns the
+        fragments that were merged.
+        """
 
         ####################
         # NEIGHBOUR SEARCH #
         ####################
 
         bonded_pairs = []
-        #iterate over the ligands (atoms added with add_neighbours())
-        for label, tag in zip(self.labels[1:], self.tags[1:]): # For each ligand
+        # Iterate over the ligands (atoms added with add_neighbours())
+        for label, tag in zip(self.labels[1:], self.tags[1:]):  # For each ligand
 
             # Get the neighbours of each ligand atom
-            #print('Looking for neighbours for ' + label)
-            neighbours = get_neighbours([label,])
-            _, nei_uniques = neighbours
+            _, nei_uniques = get_neighbours([label], self.orm_atoms)
 
             # If the neighbour of the ligand is also a ligand, add the bonded pair to the list.
             for nei_tag in nei_uniques:
                 if nei_tag in self.tags[1:]:
                     bonded_pairs.append((nei_tag, tag))
-                #else:
-                #    print(f'{get_label_from_id(nei_tag)} is neighbour of {label} but is not bonded to the main polyhedra.')
 
-        # If there are no bonded pairs of ligands, stop the function, return []
+        # If there are no bonded pairs of ligands, stop the function.
         if not bonded_pairs:
             print('Nothing to merge.')
             return []
 
-        # Create an adjacency list from the bonded pairs. It will
+        # Create an adjacency list from the bonded pairs.
         adj = {}
-        for a, b in bonded_pairs: # Creates a dict with keys of all atoms and values are sets with all neighbours for all atoms.
+        for a, b in bonded_pairs:  # Keys are all atoms, values are sets of their neighbours.
             # adj = {atom1: {atom2, atom3}, atom2: {atom1}, atom3: {atom1}}
-            adj.setdefault(a, set()).add(b) # If a isn't in the dictionary, add it with empty set. To this set, add b
+            adj.setdefault(a, set()).add(b)  # If a is absent, add it with an empty set. To this set, add b
             adj.setdefault(b, set()).add(a)
-
 
         #####################
         # FRAGMENT BUILDING #
         #####################
 
-        visited = set() # Keeps track of atoms assigned to a fragment
-        fragments = []  # Keeps list of final groups of fragments
+        visited = set()  # Keeps track of atoms assigned to a fragment
+        fragments = []   # Keeps list of final groups of fragments
 
         # Iterate over all atoms in the adjacency list:
         for atom in adj:
-            if atom in visited: # Skip if the atom was visited already
+            if atom in visited:  # Skip if the atom was visited already
                 continue
 
             stack = [atom]      # Add the atom to the stack (to-process list)
-            fragment = set()    # Create a new fragment as an emtpy set
+            fragment = set()    # Create a new fragment as an empty set
 
-            while stack: #While there are items in the stack
+            while stack:  # While there are items in the stack
                 current = stack.pop()       # Pop one atom
                 if current in fragment:     # If the atom is already in the fragment, skip
                     continue
                 fragment.add(current)       # Add the current atom to the fragment
 
-                # Extend the stack to work on the adjacent atoms of the current one minus the ones already the fragment
+                # Extend the stack with the adjacent atoms of the current one,
+                # minus the ones already in the fragment
                 stack.extend(adj[current] - fragment)
 
             visited |= fragment             # Mark all atoms as visited (|= merges sets)
             fragments.append(fragment)      # Adds the fragment to the final fragments list
-
 
         ##################
         # LIGAND MERGING #
         ##################
 
         tag_to_idx = {tag: i for i, tag in enumerate(self.tags)}
-        insert_at = {}  # index -> (label, coords) to place there
-        skip = set()  # indices to drop
+        centroid_at = {}  # index -> (label, coords) to place there
+        skip = set()      # indices to drop
 
         for i, frag in enumerate(fragments):
             idxs = sorted(tag_to_idx[tag] for tag in frag)
 
-            cx = sum(self.coords[j][0] for j in idxs) / len(frag)
-            cy = sum(self.coords[j][1] for j in idxs) / len(frag)
-            cz = sum(self.coords[j][2] for j in idxs) / len(frag)
+            cx = sum(self.coords[j][0] for j in idxs) / len(idxs)
+            cy = sum(self.coords[j][1] for j in idxs) / len(idxs)
+            cz = sum(self.coords[j][2] for j in idxs) / len(idxs)
 
             first = idxs[0]
-            insert_at[first] = (f'Z{i}', (cx, cy, cz))
+            centroid_at[first] = (f'Z{i}', (cx, cy, cz))
             skip.update(idxs[1:])  # keep 'first', drop the rest
 
-        new_coords = []
-        new_labels = []
-        new_tags = []
+        keep = [j for j in range(len(self.tags)) if j not in skip]
+        self._keep_indices(keep)
 
-        for j in range(len(self.tags)):
-            if j in skip:
-                continue
-            if j in insert_at:
-                label, centroid = insert_at[j]
-                new_labels.append(label)
-                new_coords.append(centroid)
-                new_tags.append(-(j + 1))  # placeholder tag, adjust as needed
-            else:
-                new_labels.append(self.labels[j])
-                new_coords.append(self.coords[j])
-                new_tags.append(self.tags[j])
-
-        self.coords = new_coords
-        self.labels = new_labels
-        self.tags = new_tags
+        # Overwrite each surviving fragment atom with its fragment's centroid. The
+        # part is inherited from the atom that was kept, so `parts` stays meaningful.
+        for new_idx, old_idx in enumerate(keep):
+            if old_idx in centroid_at:
+                label, centroid = centroid_at[old_idx]
+                self.labels[new_idx] = label
+                self.coords[new_idx] = centroid
+                self.tags[new_idx] = -(old_idx + 1)  # placeholder: no longer a real ORM atom
 
         return fragments
 
+    def _keep_indices(self, keep):
+        """Reduces every parallel list to `keep`, so they cannot drift out of step."""
+        self.labels = [self.labels[i] for i in keep]
+        self.tags = [self.tags[i] for i in keep]
+        self.coords = [self.coords[i] for i in keep]
+        self.parts = [self.parts[i] for i in keep]
+
 
 def split_by_parts(selection: AtomSelection) -> List[MolecularStructure]:
-    if len(set(selection.parts)) > 2: # If there are more than 2 parts in the selection (i.e. part 0, part 1 and part 2)
-        # Separate atoms by parts:
-        parted_labels = []
-        parted_coords = []
-        for part in set(selection.parts):
-            labels = []
-            coords = []
-            for i in range(len(selection.labels)):
-                if selection.parts[i] == part:
-                    labels.append(selection.labels[i])
-                    coords.append(selection.coords[i])
-            parted_labels.append(labels)
-            parted_coords.append(coords)
+    """Splits a disordered selection into one structure per disorder component.
 
+    Atoms in part 0 are shared by every component, so each returned structure is
+    part 0 plus one of the other parts. A selection with fewer than two disordered
+    components is returned unchanged, as a single structure.
+    """
+    unique_parts = sorted(set(selection.parts))
 
-        structures = []
-        for i in range(1, len(parted_labels)):
-            part_0n_labels = parted_labels[0] + parted_labels[i]
-            part_0n_coords = parted_coords[0] + parted_coords[i]
-            struc = MolecularStructure(part_0n_coords, part_0n_labels)
-            structures.append(struc)
-        return structures
-    else:
+    if len(unique_parts) <= 2:
         return [MolecularStructure(selection.coords, selection.labels)]
+
+    # Separate atoms by part:
+    by_part = {}
+    for part, label, coord in zip(selection.parts, selection.labels, selection.coords):
+        labels, coords = by_part.setdefault(part, ([], []))
+        labels.append(label)
+        coords.append(coord)
+
+    base_labels, base_coords = by_part[unique_parts[0]]
+
+    structures = []
+    for part in unique_parts[1:]:
+        labels, coords = by_part[part]
+        structures.append(MolecularStructure(base_coords + coords, base_labels + labels))
+
+    return structures

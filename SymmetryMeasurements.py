@@ -1,28 +1,22 @@
-import inspect
+import os
 
+import olex
+import olx
 from olexFunctions import OlexFunctions
-from reload_all import reload_all
 
 OV = OlexFunctions()
 
-from helper_functions import *
-import os
-import htmlTools
-import olex
-import olexex
-import olx
-import gui
-import shutil
-from constants import *
-import subprocess
-from autoshape import *
-from octahedral_distortion import *
-from selection import AtomSelection
-from helper_functions import *
+from reload_all import reload_all
 
-import time
+from autoshape import (ShapeCalculation, can_find_shape_msg, find_shape,
+                       print_shape_table, run_shape)
+from constants import octadist_citation, shape21_citation
+from helper_functions import (get_neighbours, get_neighbours_on_sel, get_selected_atoms,
+                              get_xyz_sel, print_console_bs, print_orm, test_selection_class)
+from octahedral_distortion import CalcDistortion
+from selection import AtomSelection, split_by_parts
+
 debug = bool(OV.GetParam("olex2.debug", False))
-
 
 instance_path = OV.DataDir()
 
@@ -47,9 +41,20 @@ p_img = eval(d['p_img'])
 p_scope = d['p_scope']
 
 OV.SetVar('SymmetryMeasurements_plugin_path', p_path)
-OV.SetParam('SymmetryMeasurements.merge_ligands', False)
 
 from PluginTools import PluginTools as PT
+
+
+def as_bool(value) -> bool:
+    """Normalises the assorted true/false spellings that reach us from the GUI.
+
+    Olex2 hands checkbox state back as a string, while a phil bool comes back as a
+    real bool, so both have to be accepted at every param read.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() in ('true', '1', 'yes', 'on')
+    return bool(value)
+
 
 # MAIN LOGIC FUNCTIONS.
 def autoSHAPE():
@@ -66,90 +71,76 @@ def autoSHAPE():
 
     selection = AtomSelection(sel_string)
 
-
-    if len(selection.labels) > 1:
-        # Remove duplicate atoms if present
-        if len(selection.labels) != len(set(selection.labels)):
-            selection.remove_duplicates()
-        struc = MolecularStructure(selection.coords, selection.labels)
+    if len(selection) > 1:
+        # Multiple atoms selected: treat them as the vertices of a non-centered shape.
+        selection.remove_duplicates()
         centered = False
-
-    else:  # single atom selected
+    else:
+        # A single atom selected: grow it into a coordination polyhedron.
         selection.add_neighbours()
-        merge = OV.GetParam('SymmetryMeasurements.merge_ligands')
-        if merge in ('true', True):
+        if as_bool(OV.GetParam('symmetrymeasurements.merge_ligands', False)):
             selection.merge_ligands()
-        struc = MolecularStructure(selection.coords, selection.labels)
         centered = True
 
-
-    if len(set(selection.parts)) > 2: # If there are more than 2 parts in the selection, split it by parts
-        structures = split_by_parts(selection)
-    else:                             # Else use the default structure
-        structures = [struc]
+    # Returns one structure per disorder component, or a single structure when the
+    # selection is not disordered.
+    structures = split_by_parts(selection)
 
     for i, structure in enumerate(structures):
-        shape_measurement = ShapeCalculation(structure, f'{olx.FileName()}_{i}', centered, ['%fullout'])
-        folder = shape_measurement.write_tab(olx.FilePath())
+        try:
+            shape_measurement = ShapeCalculation(structure, f'{olx.FileName()}_{i}',
+                                                 centered, ['%fullout'])
+        except ValueError as e:
+            print(f'Skipping part {i}: {e}')
+            continue
 
-        files = run_shape(folder)
-        for f in files:
+        folder = shape_measurement.write_tab(olx.FilePath())
+        if folder is None:
+            continue
+
+        for f in run_shape(folder):
             print_shape_table(os.path.join(folder, f'{f}.tab'))
 
     print(shape21_citation)
     return True
 
-def autoOCTADIST():
 
+def autoOCTADIST():
     # Get the selected atoms.
     sel_string = olex.f('sel()')
     if sel_string == '':
         print('Invalid atom selection: no atoms selected.')
         return False
-    selection = AtomSelection(sel_string)  # Gets the selection
 
-    # Exit if selection is empty
-    if not selection.labels:
-        print(f'Invalid atom selection: no atoms selected.')
+    selection = AtomSelection(sel_string)
+
+    # Exit if the selection is anything other than the single central atom.
+    if len(selection) != 1:
+        print(f'Invalid atom selection: expected 1 atom, found {len(selection)}.')
         return False
 
-    # Exit if selection is more than one atom.
-    if len(selection.labels) != 1:
-        print(f'Invalid atom selection: expected 1 atom, found {len(selection.labels)}.')
-        return False
-
-    #Add coordinated atoms to the current selection.
+    # Add coordinated atoms to the current selection.
     selection.add_neighbours()
-    struc = MolecularStructure(selection.coords, selection.labels)
 
-    print(selection.parts)
-    if len(set(selection.parts)) > 2:  # If there are more than 2 parts in the selection, split it by parts
-        structures = split_by_parts(selection)
-    else:  # Else use the default structure
-        structures = [struc]
-
-    for structure in structures:
-        print(structure.coords)
-
-
-    for structure in structures:
-        # Skip this part if there are not 7 atoms.
-        if len(structure.labels) != 7:
-            print(f'Invalid polyhedra: expected 6 atoms connected to the central atom, found {len(selection.labels) - 1}.')
+    for structure in split_by_parts(selection):
+        try:
+            calculation = CalcDistortion(structure)
+        except ValueError as e:
+            print(f'Invalid polyhedra for {structure.labels[0]}: {e}')
             continue
 
-        calculation = CalcDistortion(structure)
-        calculation.print_results(os.path.basename(olx.FilePath()))
+        calculation.print_results(olx.FileName())
         calculation.draw_octahedron()
 
-    #Citation
-    print('\nThis calculations were made using a reimplementation of the OctaDist algorithm by David J. Harding et al.')
+    # Citation
+    print('\nThis calculations were made using a reimplementation of the OctaDist '
+          'algorithm by David J. Harding et al.')
     print(octadist_citation)
     return True
 
+
 def shape_status_html():
-    import shutil
-    where = shutil.which('shape')
+    where = find_shape()
     found = where is not None
     color = OV.GetParam('gui.green') if found else OV.GetParam('gui.grey')
     text = f'SHAPE executable found at: {where}' if found else 'Unable to find shape.exe in the system path.'
@@ -168,24 +159,22 @@ class SymmetryMeasurements(PT):
         self.print_version_date()
         if not from_outside:
             self.setup_gui()
-        #OV.SetParam('SymmetryMeasurements.merge_ligands', 'false')
-        OV.registerFunction(get_selected_atoms, True, "SymmetryMeasurements")
-        OV.registerFunction(get_neighbours, True, "SymmetryMeasurements")
-        OV.registerFunction(can_find_shape_msg, True, "SymmetryMeasurements")
-        OV.registerFunction(get_xyz_sel, True, "SymmetryMeasurements")
-        OV.registerFunction(get_neighbours_on_sel, True, "SymmetryMeasurements")
-        OV.registerFunction(build_polyhedra_from_centre, True, "SymmetryMeasurements")
-        #OV.registerFunction(build_dat_file, True, "SymmetryMeasurements")
-        #OV.registerFunction(write_dat, True, "SymmetryMeasurements")
+
+        # Main entry points.
         OV.registerFunction(autoSHAPE, True, "SymmetryMeasurements")
         OV.registerFunction(autoOCTADIST, True, "SymmetryMeasurements")
-        OV.registerFunction(build_poly_on_sel, True, "SymmetryMeasurements")
+        OV.registerFunction(can_find_shape_msg, True, "SymmetryMeasurements")
         OV.registerFunction(shape_status_html, False, 'SymmetryMeasurements')
+
+        # Debug panel helpers.
+        OV.registerFunction(get_selected_atoms, True, "SymmetryMeasurements")
+        OV.registerFunction(get_neighbours, True, "SymmetryMeasurements")
+        OV.registerFunction(get_neighbours_on_sel, True, "SymmetryMeasurements")
+        OV.registerFunction(get_xyz_sel, True, "SymmetryMeasurements")
         OV.registerFunction(print_console_bs, False, 'SymmetryMeasurements')
         OV.registerFunction(print_orm, False, 'SymmetryMeasurements')
         OV.registerFunction(test_selection_class, False, 'SymmetryMeasurements')
     # END Generated =======================================
-
 
 
 SymmetryMeasurements_instance = SymmetryMeasurements()
