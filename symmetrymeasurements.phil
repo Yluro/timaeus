@@ -10,4 +10,18 @@ symmetrymeasurements{
   merge_ligands = False
     .type = bool
     .help = Merge pi-bonded ligands into their centroid before measuring.
+
+  cosmochlore{
+    exe_path = ''
+      .type = str
+      .help = Explicit path to the cosmochlore executable. Leave empty to search PATH.
+    csom{
+      point_groups = ''
+        .type = str
+        .help = Default space-separated point groups for autoCSOM(), e.g. "Oh D4h D3d".
+      mode = 'auto'
+        .type = str
+        .help = Default centering mode for autoCSOM() (auto, first, centroid, manual).
+    }
+  }
 }
