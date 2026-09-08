@@ -1,36 +1,29 @@
-import shutil
+"""Generating SHAPE 2.1 input, running it, and parsing what it writes back."""
 import os
+import shutil
 import subprocess
-import sys
-
-from constants import *
-from helper_functions import *
-import numpy as np
-from collections.abc import Iterable
 from typing import List
-from selection import *
+
+import numpy as np
+
+from constants import REF_SHAPE_DICT
+from selection import MolecularStructure
 
 
 class ShapeCalculation:
-    def __init__(self, structure: MolecularStructure, file_name: str, centered: bool, keywords: List[str]):
+    """Builds the .dat input file SHAPE 2.1 expects for one structure."""
 
+    def __init__(self, structure: MolecularStructure, file_name: str, centered: bool,
+                 keywords: List[str]):
 
         self.coords = np.array(structure.coords, dtype=np.float64)
         self.labels = structure.labels
-        '''self.labels = labels
-        if not self.labels:
-            if centered:
-                self.labels = ['Z'] + [f'L{i}' for i in range(len(coords) - 1)]
-            else:
-                self.labels = [f'A{i}' for i in range(len(coords))]
-
-        self.coords = np.array(coords, dtype=np.float64)'''
 
         self.can_find_shape = can_find_shape_msg()
         self.is_centered = centered
         self.file_name = file_name
-        self.dat_keywords = '\n'.join(keywords)+('\n'
-                                                 '')
+        self.dat_keywords = '\n'.join(keywords) + '\n'
+
         if centered:
             self.centre = 1
             self.ligands = len(self.coords) - 1
@@ -45,22 +38,26 @@ class ShapeCalculation:
         self.subfolder_name = self.dat_title.strip().split(' ')[-1]
         self.positions = f'{self.ligands} {self.centre}\n'
 
-        try:
-            self.geometries = f'{REF_SHAPE_DICT[self.ligands]}\n'  # The SHAPE2.1 documentation gives these strings of numbers
-        except KeyError as e:
-            print(f'ERROR: No defined geometries for {self.ligands} vertices. Check the structure for extra bonds or atoms.')
+        # The SHAPE 2.1 documentation gives these strings of numbers.
+        if self.ligands not in REF_SHAPE_DICT:
+            raise ValueError(f'No reference geometries defined for {self.ligands} vertices. '
+                             f'Check the structure for extra bonds or atoms.')
+        self.geometries = f'{REF_SHAPE_DICT[self.ligands]}\n'
 
-
-        # Builds Label x y z table.
+        # Builds the Label x y z table.
         self.table = '\n'.join(
             f'{label} {" ".join(f"{x:g}" for x in xyz)}'
             for label, xyz in zip(self.labels, self.coords)
         )  # Joins all rows of the table
 
-        self.dat_file_contents = self.dat_title + self.dat_keywords + self.positions + self.geometries + self.subtitle + self.table
+        self.dat_file_contents = (self.dat_title + self.dat_keywords + self.positions
+                                  + self.geometries + self.subtitle + self.table)
 
     def write_tab(self, file_path):
+        """Writes the .dat file into a fresh numbered run folder.
 
+        Returns the folder it wrote to, or None if all 99 run slots are taken.
+        """
         for i in range(99):
             file_name = f'{self.subfolder_name}_{i}.dat'
             file_dir = os.path.join(file_path, 'autoSHAPE', self.subfolder_name, str(i))
@@ -77,95 +74,98 @@ class ShapeCalculation:
 
             return file_dir
 
+        print(f'Could not write {self.subfolder_name}: all 99 run folders already exist.')
         return None
 
-    def run_shape(self):
-        pass
+
+def find_shape():
+    """Returns the path to the SHAPE 2.1 executable, or None if it is not on PATH."""
+    return shutil.which('shape')
 
 
-def can_find_shape_msg(silent=True):
-    shape_path = shutil.which("shape")
+def can_find_shape_msg(silent=True) -> bool:
+    shape_path = find_shape()
     if shape_path is None:
-        print(f"Unable to find shape.exe in the system path.")
+        print("Unable to find shape.exe in the system path.")
         return False
-    else:
-        if not silent:
-            print(f"SHAPE executable found at: {shape_path}")
-        return True
+
+    if not silent:
+        print(f"SHAPE executable found at: {shape_path}")
+    return True
 
 
-def run_shape(folder):
+def run_shape(folder) -> List[str]:
     """
     Runs a SHAPE instance on all dat files in a specified folder.
     :param folder:
     :return files: Name of the output files without file extension.
     """
-    print(f"Running SHAPE...")
+    if not folder:
+        return []
+
+    print("Running SHAPE...")
     dat_files = [f for f in os.listdir(folder) if f.endswith('.dat')]
     for file in dat_files:
         process = subprocess.Popen('shape', shell=True, stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    text=True, cwd=folder)
-        out, err = process.communicate(input=f'{file}\n')
-        print(out)  # Send Enter key (newline character)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   text=True, cwd=folder)
+        out, err = process.communicate(input=f'{file}\n')  # Send the file name and an Enter key
+        print(out)
 
-    output_files = [f[:-4] for f in dat_files]
-    return output_files
+    return [f[:-4] for f in dat_files]
 
 
 def parse_shape_tab(tab_path):
-
-    #print(f"Parsing: {tab_path}")
-    #print(f"Exists: {os.path.exists(tab_path)}")
-
+    """Reads a SHAPE .tab file. Returns (atom_label, shape_names, shape_labels, values)."""
     with open(tab_path, 'r') as f:
         lines = f.readlines()
 
-        # Find the polyhedra table
-        # (Label    N   Symm    Name)
-        shape_labels = []
-        shape_names = []
-        for tab_line in lines[5:]: # The array splicing skips the header of the tab file. That messes up the search
-            if len(tab_line.split()) >= 4 and tab_line.split()[1].isdigit():
-                shape_labels.append(tab_line.split()[0])
-                name = ' '.join(tab_line.split()[3:])
-                shape_names.append(name)
+    # Find the polyhedra table (Label  N  Symm  Name).
+    # The slice skips the header of the tab file, which would otherwise confuse the search.
+    shape_labels = []
+    shape_names = []
+    for tab_line in lines[5:]:
+        if len(tab_line.split()) >= 4 and tab_line.split()[1].isdigit():
+            shape_labels.append(tab_line.split()[0])
+            shape_names.append(' '.join(tab_line.split()[3:]))
 
-        #print(shape_labels)
-        # Second pass through the tab file to find the data with the CShMs
-        data_row = None
-        for tab_line in lines[5:]:
-            if ',' in tab_line and any(c.isdigit() for c in tab_line):
-                #print(tab_line)
-                data_row = tab_line
+    # Second pass through the tab file to find the data row with the CShMs.
+    data_row = None
+    for tab_line in lines[5:]:
+        if ',' in tab_line and any(c.isdigit() for c in tab_line):
+            data_row = tab_line
 
-        if data_row is None:
-            print(f"Could not parse data row in {tab_path}")
-            return None
+    if data_row is None:
+        print(f"Could not parse data row in {tab_path}")
+        return None
 
-        parts = [c.strip() for c in data_row.split(',')]
-        atom_label = parts[0]
-        values = [float(v) for v in parts[1:]]
+    parts = [c.strip() for c in data_row.split(',')]
+    atom_label = parts[0]
+    values = [float(v) for v in parts[1:]]
 
-        return atom_label, shape_names, shape_labels, values
+    return atom_label, shape_names, shape_labels, values
 
 
 def print_shape_table(tab_path):
     result = parse_shape_tab(tab_path)
     if result is None:
         return False
+
     atom_label, shape_names, shape_labels, values = result
     max_name_length = max(len(name) for name in shape_names) + 2
     min_val = min(values)
-    print('\n'+'=' * 65)
+
+    print('\n' + '=' * 65)
     print(f'SHAPE 2.1 results for {atom_label} in {os.path.basename(tab_path)}:')
-    print('-'*65)
+    print('-' * 65)
     print(f"{'Polyhedron':<{max_name_length}}{'Symbol':<10}{'CShM':>10}")
-    print('-'*65)
+    print('-' * 65)
     for name, label, val in zip(shape_names, shape_labels, values):
         marker = ' <---- best fit' if val == min_val else ''
-        print(f'{name:<{max_name_length}}{label:<10}{val:>10}{marker:>10}')
-    print('='*65)
+        print(f'{name:<{max_name_length}}{label:<10}{val:>10.3f}{marker:>10}')
+    print('=' * 65)
+
     if min_val > 10:
-        print(f'WARNING: extremely distorted geometries found for {atom_label}. Make sure there is no unnatural bonds in the model.')
-    return None
+        print(f'WARNING: extremely distorted geometries found for {atom_label}. '
+              f'Make sure there is no unnatural bonds in the model.')
+    return True

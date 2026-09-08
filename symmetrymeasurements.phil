@@ -1,4 +1,3 @@
-
 symmetrymeasurements{
   gui{
     location = 'tools'
@@ -7,8 +6,8 @@ symmetrymeasurements{
     before = 'images'
       .type = str
       .help = The tool before which the SymmetryMeasurements GUI shall appear.
-    merge_ligands = false
-       .type = bool
-
-}
+  }
+  merge_ligands = False
+    .type = bool
+    .help = Merge pi-bonded ligands into their centroid before measuring.
 }

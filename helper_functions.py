@@ -1,18 +1,25 @@
-import os
-import htmlTools
+"""Thin wrappers over the Olex2 API.
+
+This is the bottom layer of the plugin: it imports nothing from the plugin's own
+modules, so `selection`, `autoshape` and `octahedral_distortion` can all depend on
+it without creating an import cycle.
+
+Coordinate convention: every function here returns orthogonal coordinates as a
+`tuple[float, float, float]`. Atom identity is an integer ORM tag; labels are
+strings that may carry a symmetry suffix (`N2_$1`).
+"""
 import olex
 import olexex
 import olx
-from collections.abc import Iterable
-from selection import AtomSelection, split_by_parts
-import gui
-import shutil
-from constants import *
-import subprocess
-
 
 
 ## SMALL HELPER FUNCTIONS
+def get_orm_atoms() -> list:
+    """Returns the atom list of the loaded refinement model.
+    """
+    return olexex.OlexRefinementModel().atoms()
+
+
 def get_selected_atoms() -> str:
     # Gets the selection from Olex2 -  Returns a string with atom labels.
     # If no atoms are selected, returns ''
@@ -21,168 +28,95 @@ def get_selected_atoms() -> str:
     return selection
 
 
-def get_id_from_label(atom_label) -> int:
-    orm_atoms = olexex.OlexRefinementModel().atoms()
-    tag = next((atom['tag'] for atom in orm_atoms if atom['label'] == atom_label), None)
+def get_id_from_label(atom_label, orm=None):
+    """Returns the ORM tag for `atom_label`, or None if the atom is not in the model.
+
+    Will strip symmetry suffixes like _$1 if no tag is found."""
+    orm = get_orm_atoms() if orm is None else orm
+    tag = next((atom['tag'] for atom in orm if atom['label'] == atom_label), None)
 
     if tag is None:
         clean_label = atom_label.split('_$')[0]  # strip symmetry suffix e.g. 'N2_$1' -> 'N2'
-        orm_atoms = olexex.OlexRefinementModel().atoms()
-        tag = next((atom['tag'] for atom in orm_atoms if atom['label'] == clean_label), None)
+        tag = next((atom['tag'] for atom in orm if atom['label'] == clean_label), None)
 
     return tag
 
 
-def get_label_from_id(atom_tag):
-    orm_atoms = olexex.OlexRefinementModel().atoms()
-    label = next((atom['label'] for atom in orm_atoms if atom['tag'] == atom_tag), None)
-    return label
+def get_label_from_id(atom_tag, orm=None):
+    """Returns the ORM label for `atom_tag`, or None if the tag is not in the model."""
+    orm = get_orm_atoms() if orm is None else orm
+    return next((atom['label'] for atom in orm if atom['tag'] == atom_tag), None)
 
 
-def get_xyz_sel():
-    selection = olex.f('sel()')
-    if selection == '':
-        print('No atoms selected.')
-        return None
-    try:
-        sel_tag = get_id_from_label(selection)
-        print(selection)
-        return get_xyz(sel_tag)
-    except RuntimeError:
-        print(f'Could not find {selection} in the orm')
-        return None
-
-
-def get_xyz(atom_tag):
+def get_xyz(atom_tag) -> tuple:
+    """Returns the orthogonal coordinates of `atom_tag` as a tuple of floats."""
     crd = olx.xf.au.GetAtomCrd(atom_tag)
     xyz_string = olx.xf.au.Orthogonalise(crd).split(' ')
-    xyz = tuple(float(x) for x in xyz_string)
-    return xyz
-
-def get_part(atom_label):
-    return int(olx.xf.au.GetAtomPart(atom_label))
+    return tuple(float(x) for x in xyz_string)
 
 
-def get_neighbours(atom_labels):
-    # Gets the list of atoms from the loaded model.
-    # The orm is a list of dictionaries, containing labels, atom_ids, parts, ADPs, etc.
-    orm_atoms = olexex.OlexRefinementModel().atoms()
+def get_part(atom_tag) -> int:
+    """Returns the disorder part of `atom_tag`. Note this takes a tag, not a label."""
+    return int(olx.xf.au.GetAtomPart(atom_tag))
 
-    ##selection = get_selected_atoms()
-    if atom_labels == [""]:
+
+def get_neighbours(atom_labels, orm=None):
+    """Returns (per_atom_neighbours, unique_neighbours) for the given labels.
+
+    Both elements are always lists, empty when nothing could be resolved. A
+    neighbour is either an int tag, or a tuple whose first element is the tag and
+    whose second element is the coordinate of a symmetry-generated image.
+    """
+    orm = get_orm_atoms() if orm is None else orm
+
+    if not atom_labels or atom_labels == [""]:
         print("Could not find neighbours. No atoms selected.")
-        return None
-
-    ##selection = selection.split(' ')
-    ##print(selection)
+        return [], []
 
     neighbours_tags_list = []
     unique_neighbours = []
-    ##neighbours_labels = []
     for atom_label in atom_labels:
-        # next finds the first occurrence in orm_atoms in which the label matches
-        # with the sel and returns the atoms neighbours as a tuple of tags:
-        neighbour_tags = next((atom['neighbours'] for atom in orm_atoms if atom['label'] == atom_label), ())
-        #tags is an empty tuple if it wasn't found in the orm: selected a Q-peak
-        #tags is a list of len() = 0 if selected a
-        if neighbour_tags is None or len(neighbour_tags) == 0:
+        # next finds the first occurrence in orm in which the label matches
+        # with the sel and returns the atom's neighbours as a tuple of tags:
+        neighbour_tags = next((atom['neighbours'] for atom in orm if atom['label'] == atom_label), ())
+        # neighbour_tags is an empty tuple if the label wasn't found in the orm (e.g. a Q-peak)
+        if not neighbour_tags:
             print(f'No connected atoms to {atom_label}.')
 
-        #print(neighbour_tags) #(3, (1.332173751267887, 9.570147745635163, 1.1004595820674223), ((-1, 0, 0), (0, -1, 0), (0, 0, -1), (0.0, 1.0, 0.0)))
         neighbours_tags_list.append(neighbour_tags)
 
         for neighbour in neighbour_tags:
             if neighbour not in unique_neighbours:
                 unique_neighbours.append(neighbour)
 
-
-        # DEPRECATED - THIS CODE HERE RETURNED THE NEIGHBOURHOOD AS A LIST OF UNIQUE TAGS - DEPRECATED
-        # NOW THIS FUNCTIONS RETURNS A LIST OF UNIQUE NEIGHBOUR LABELS
-        '''for tag in neighbour_tags:  
-            if tag not in neighbour_tags:
-                neighbour_tags.append(tag)
-                # Use a similar next constructor to retrieve the
-                # label from the orm and append it to the Neighbours list
-                neighbours_label = next((atom['label'] for atom in orm_atoms if atom['tag'] == tag), None)
-                neighbours_labels.append(neighbours_label)'''
-    #print(f'Neighbours for each atom selected:{neighbours_tags_list}')
-    #print(f'Unique neighbours:{unique_neighbours}')
     return neighbours_tags_list, unique_neighbours
+
+
+## DEBUG HELPERS - wired to the SymmetryMeasurements-debug GUI panel.
+def get_xyz_sel():
+    """Prints and returns the coordinates of a single selected atom."""
+    selection = olex.f('sel()')
+    if selection == '':
+        print('No atoms selected.')
+        return None
+
+    labels = selection.split(' ')
+    if len(labels) != 1:
+        print(f'Invalid atom selection: expected 1 atom, found {len(labels)}.')
+        return None
+
+    tag = get_id_from_label(labels[0])
+    if tag is None:
+        print(f'Could not find {labels[0]} in the orm.')
+        return None
+
+    print(selection)
+    return get_xyz(tag)
 
 
 def get_neighbours_on_sel():
     sel = olex.f('sel()')
-    atom_labels = sel.split(' ')
-    return get_neighbours(atom_labels)
-
-
-def build_polyhedra_from_centre(atom_label=('Mn1',)):
-    neighbours = get_neighbours(atom_label)
-    if neighbours is None:
-        print(f'No neighbours can be found for {atom_label}.')
-        return None
-
-    _, unique_neighbours = neighbours
-    #print(unique_neighbours)
-    if len(atom_label) > 1:
-        print(f'Invalid selection: expected 1 atom, found {len(atom_label)}.')
-        return None
-
-    centre = atom_label[0]
-    centre_id = get_id_from_label(centre)
-    crd = olx.xf.au.GetAtomCrd(centre_id)
-    xyz = olx.xf.au.Orthogonalise(crd)
-
-    polyhedra = [(centre, xyz)]
-
-
-    for neighbour in unique_neighbours:
-        if type(neighbour) == tuple:
-            #print(f'Found tuple: {neighbour}')
-            # get_neigours() returns a complicated tuple if the neighbour is outside the ASU.
-            # This list already contains the "extended coordinates of the neighbour atoms"
-            xyz = ' '.join(f'{x:.4f}' for x in neighbour[1]) # Join the xyz tuple values into a string
-            label = get_label_from_id(neighbour[0])
-            polyhedra.append((label, xyz))
-        else:
-            xyz = get_xyz(neighbour)
-            label = get_label_from_id(neighbour)
-            polyhedra.append((label, xyz))
-
-    #print(polyhedra)
-    return polyhedra
-
-
-def build_poly_on_sel():
-    sel = olex.f('sel()')
-    label = sel.split(' ')
-    poly = build_polyhedra_from_centre(label)
-    print(poly)
-    return poly
-
-
-def parse_coordinate(xyz):
-    """
-    Parses a coordinate into a tuple of floats,
-    Accepts any Iter(float) or strings separated by spaces.
-    :param xyz: Iter(Any) or str
-    :return crd: tuple(x, y, z)
-    """
-    crd = None
-    if isinstance(xyz, str):
-        crd = tuple(map(float, xyz.split(' ')))
-    elif isinstance(xyz, Iterable):
-        crd = tuple([float(v) for v in xyz])
-    else:
-        raise TypeError(f'Could not parse coordinate: {xyz}')
-
-    if crd is None:
-        raise TypeError(f'Could not parse coordinate: {xyz}')
-
-    if len(crd) != 3:
-        raise ValueError(f'Invalid coordinate. Expected 3 coordinates, found {len(crd)}.')
-
-    return crd
+    return get_neighbours(sel.split(' '))
 
 
 def print_console_bs():
@@ -195,23 +129,21 @@ def print_console_bs():
 
 
 def print_orm():
-    orm = olexex.OlexRefinementModel().atoms()
-
     with open('orm.txt', 'w') as f:
-        for line in orm:
-            f.write(str(line)+'\n')
+        for line in get_orm_atoms():
+            f.write(str(line) + '\n')
 
 
 def test_selection_class():
+    # Imported here rather than at module scope: `selection` depends on this
+    # module, so a top-level import would create a cycle.
+    from selection import AtomSelection, split_by_parts
+
     selection = AtomSelection(olex.f('sel()'))
     print(selection.labels)
     print('Add neighbours')
     selection.add_neighbours()
     print(selection.labels)
     print('Splitting in parts.')
-    parts = split_by_parts(selection)
-    for p in parts: print(f'{p.coords}\n{p.labels}')
-
-
-
-
+    for p in split_by_parts(selection):
+        print(f'{p.coords}\n{p.labels}')

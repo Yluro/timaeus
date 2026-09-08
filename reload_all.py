@@ -9,7 +9,7 @@ def reload_all():
         sys.path.insert(0, base)
 
     for f in os.listdir(base):
-        if f.endswith('.py') and f != 'reload_all.py' and f != 'deprecated.py':
+        if f.endswith('.py') and f != 'reload_all.py':
             module_name = f[:-3]
             if module_name in sys.modules:
                 importlib.reload(sys.modules[module_name])
