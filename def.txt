@@ -1,5 +1,5 @@
 
   p_name = SymmetryMeasurements
   p_htm = SymmetryMeasurements
-  p_img = [("SymmetryMeasurements",'h1'), ("SymmetryMeasurements-Extras",'h3')]
+  p_img = [("SymmetryMeasurements",'h1'), ("SHAPE 2.1",'h3'), ("OctaDist",'h3'), ("Cosmochlore",'h3'), ("SymmetryMeasurements-Extras",'h3'), ("Options",'h3')]
   p_scope = symmetrymeasurements
