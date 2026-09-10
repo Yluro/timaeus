@@ -42,7 +42,7 @@ p_htm = d['p_htm']
 p_img = eval(d['p_img'])
 p_scope = d['p_scope']
 
-OV.SetVar('SymmetryMeasurements_plugin_path', p_path)
+OV.SetVar('Timaeus_plugin_path', p_path)
 
 from PluginTools import PluginTools as PT
 
@@ -72,7 +72,7 @@ def _prepare_structures(sel_string, merge=None):
         # A single atom selected: grow it into a coordination polyhedron.
         selection.add_neighbours()
         if merge is None:
-            merge = as_bool(OV.GetParam('symmetrymeasurements.merge_ligands', False))
+            merge = as_bool(OV.GetParam('timaeus.merge_ligands', False))
         if merge:
             selection.merge_ligands()
         centered = True
@@ -82,7 +82,7 @@ def _prepare_structures(sel_string, merge=None):
 
 
 def _cosmochlore_exe_path():
-    return OV.GetParam('symmetrymeasurements.cosmochlore.exe_path', '') or None
+    return OV.GetParam('timaeus.cosmochlore.exe_path', '') or None
 
 
 def _cosmochlore_workdir():
@@ -107,7 +107,7 @@ def _safe_key(name: str) -> str:
 
 
 def _user_shape_param(name: str) -> str:
-    return f'symmetrymeasurements.cosmochlore.cshm.user_shape.{_safe_key(name)}'
+    return f'timaeus.cosmochlore.cshm.user_shape.{_safe_key(name)}'
 
 
 def user_shapes_checkboxes_html():
@@ -153,6 +153,17 @@ def open_user_shapes_folder():
     path = _user_shapes_dir()
     os.makedirs(path, exist_ok=True)
     olx.Shell(path)
+
+
+def reload_plugin():
+    """Re-imports every plugin module from wherever the plugin is installed,
+    so the Extras button doesn't depend on a hardcoded install path."""
+    reload_all()
+
+
+def open_plugin_folder():
+    """Opens the plugin's own folder in the OS file browser."""
+    olx.Shell(p_path)
 
 
 # MAIN LOGIC FUNCTIONS.
@@ -247,9 +258,9 @@ def autoCSHM(shapes=None, user_shapes=None, table=None, ideal=None):
     if user_shapes is None:
         user_shapes = _selected_user_shapes() or None
     if table is None:
-        table = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.cshm.table', False))
+        table = as_bool(OV.GetParam('timaeus.cosmochlore.cshm.table', False))
     if ideal is None:
-        ideal = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.cshm.ideal', False))
+        ideal = as_bool(OV.GetParam('timaeus.cosmochlore.cshm.ideal', False))
 
     structures, centered = _prepare_structures(olex.f('sel()'))
     if structures is None:
@@ -278,7 +289,7 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
     """Continuous Symmetry Operation Measures via cosmochlore, on the current selection.
 
     point_groups: a space-separated string or list of Schoenflies, falls back to the
-    symmetrymeasurements.cosmochlore.csom.point_groups phil param when not given.
+    timaeus.cosmochlore.csom.point_groups phil param when not given.
 
     mode: centering mode (auto/first/centroid/manual), defaults to the matching phil param.
 
@@ -295,18 +306,18 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
         return False
 
     if point_groups is None:
-        point_groups = OV.GetParam('symmetrymeasurements.cosmochlore.csom.point_groups', '')
+        point_groups = OV.GetParam('timaeus.cosmochlore.csom.point_groups', '')
     if isinstance(point_groups, str):
         point_groups = point_groups.split()
 
     if not point_groups:
         print('No point groups given. Pass e.g. '
-              "spy.SymmetryMeasurements.autoCSOM('Oh D4h D3d'), or set "
-              "symmetrymeasurements.cosmochlore.csom.point_groups.")
+              "spy.Timaeus.autoCSOM('Oh D4h D3d'), or set "
+              "timaeus.cosmochlore.csom.point_groups.")
         return False
 
     if mode is None:
-        mode = OV.GetParam('symmetrymeasurements.cosmochlore.csom.mode', 'auto')
+        mode = OV.GetParam('timaeus.cosmochlore.csom.mode', 'auto')
     # Olex2's combo control capitalises the value it hands back (e.g. 'auto'
     # -> 'Auto') regardless of the case used in the combo's own item list, so
     # normalise here rather than trust whatever case arrives from the GUI or a
@@ -314,7 +325,7 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
     mode = str(mode).strip().lower()
 
     if vector is None:
-        vector_str = OV.GetParam('symmetrymeasurements.cosmochlore.csom.vector', '')
+        vector_str = OV.GetParam('timaeus.cosmochlore.csom.vector', '')
         if vector_str.strip():
             try:
                 vector = [float(v) for v in vector_str.split()]
@@ -330,17 +341,17 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
     if mode == 'manual' and not vector:
         print('Centering mode is "manual" but no centering vector was given. Set it in '
               'the Cosmochlore section (x y z, space-separated), or pass '
-              "spy.SymmetryMeasurements.autoCSOM(vector=[x, y, z]).")
+              "spy.Timaeus.autoCSOM(vector=[x, y, z]).")
         return False
 
     if full is None:
-        full = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.full', False))
+        full = as_bool(OV.GetParam('timaeus.cosmochlore.csom.full', False))
     if table is None:
-        table = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.table', False))
+        table = as_bool(OV.GetParam('timaeus.cosmochlore.csom.table', False))
     if operated is None:
-        operated = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.operated', False))
+        operated = as_bool(OV.GetParam('timaeus.cosmochlore.csom.operated', False))
     if ignore_labels is None:
-        ignore_labels = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.ignore_labels', False))
+        ignore_labels = as_bool(OV.GetParam('timaeus.cosmochlore.csom.ignore_labels', False))
 
     structures, centered = _prepare_structures(olex.f('sel()'))
     if structures is None:
@@ -383,9 +394,9 @@ def autoODIS(full=None, table=None):
         return False
 
     if full is None:
-        full = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.odis.full', False))
+        full = as_bool(OV.GetParam('timaeus.cosmochlore.odis.full', False))
     if table is None:
-        table = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.odis.table', False))
+        table = as_bool(OV.GetParam('timaeus.cosmochlore.odis.table', False))
 
     sel_string = olex.f('sel()')
     if sel_string == '':
@@ -441,9 +452,9 @@ def cosmochlore_status_html():
     return f"<font color='{OV.GetParam('gui.green')}'>{text}</font>"
 
 
-class SymmetryMeasurements(PT):
+class Timaeus(PT):
     def __init__(self):
-        super(SymmetryMeasurements, self).__init__()
+        super(Timaeus, self).__init__()
         self.p_name = p_name
         self.p_path = p_path
         self.p_scope = p_scope
@@ -455,32 +466,36 @@ class SymmetryMeasurements(PT):
             self.setup_gui()
 
         # Main entry points.
-        OV.registerFunction(autoSHAPE, True, "SymmetryMeasurements")
-        OV.registerFunction(autoOCTADIST, True, "SymmetryMeasurements")
-        OV.registerFunction(can_find_shape_msg, True, "SymmetryMeasurements")
-        OV.registerFunction(shape_status_html, False, 'SymmetryMeasurements')
+        OV.registerFunction(autoSHAPE, True, "Timaeus")
+        OV.registerFunction(autoOCTADIST, True, "Timaeus")
+        OV.registerFunction(can_find_shape_msg, True, "Timaeus")
+        OV.registerFunction(shape_status_html, False, 'Timaeus')
 
         # cosmochlore entry points.
-        OV.registerFunction(autoCSHM, True, "SymmetryMeasurements")
-        OV.registerFunction(autoCSOM, True, "SymmetryMeasurements")
-        OV.registerFunction(autoODIS, True, "SymmetryMeasurements")
-        OV.registerFunction(cosmochlore.can_find_cosmochlore_msg, False, "SymmetryMeasurements")
-        OV.registerFunction(cosmochlore_status_html, False, "SymmetryMeasurements")
-        OV.registerFunction(user_shapes_checkboxes_html, False, "SymmetryMeasurements")
-        OV.registerFunction(open_user_shapes_folder, True, "SymmetryMeasurements")
+        OV.registerFunction(autoCSHM, True, "Timaeus")
+        OV.registerFunction(autoCSOM, True, "Timaeus")
+        OV.registerFunction(autoODIS, True, "Timaeus")
+        OV.registerFunction(cosmochlore.can_find_cosmochlore_msg, False, "Timaeus")
+        OV.registerFunction(cosmochlore_status_html, False, "Timaeus")
+        OV.registerFunction(user_shapes_checkboxes_html, False, "Timaeus")
+        OV.registerFunction(open_user_shapes_folder, True, "Timaeus")
+
+        # Extras panel.
+        OV.registerFunction(reload_plugin, True, "Timaeus")
+        OV.registerFunction(open_plugin_folder, True, "Timaeus")
 
         # Debug panel helpers.
-        OV.registerFunction(get_selected_atoms, True, "SymmetryMeasurements")
-        OV.registerFunction(get_neighbours, True, "SymmetryMeasurements")
-        OV.registerFunction(get_neighbours_on_sel, True, "SymmetryMeasurements")
-        OV.registerFunction(get_xyz_sel, True, "SymmetryMeasurements")
-        OV.registerFunction(print_console_bs, False, 'SymmetryMeasurements')
-        OV.registerFunction(print_orm, False, 'SymmetryMeasurements')
-        OV.registerFunction(test_selection_class, False, 'SymmetryMeasurements')
+        OV.registerFunction(get_selected_atoms, True, "Timaeus")
+        OV.registerFunction(get_neighbours, True, "Timaeus")
+        OV.registerFunction(get_neighbours_on_sel, True, "Timaeus")
+        OV.registerFunction(get_xyz_sel, True, "Timaeus")
+        OV.registerFunction(print_console_bs, False, 'Timaeus')
+        OV.registerFunction(print_orm, False, 'Timaeus')
+        OV.registerFunction(test_selection_class, False, 'Timaeus')
     # END Generated =======================================
 
 
-SymmetryMeasurements_instance = SymmetryMeasurements()
-print("Loading Symess modules.")
+Timaeus_instance = Timaeus()
+print("Loading Timaeus modules.")
 reload_all()
-print("Symmetry Measurements by JSG loaded.")
+print("Timaeus by JSG loaded.")
