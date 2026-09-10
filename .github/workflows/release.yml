@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Full history + tags, so we can diff against the previous tag.
+          fetch-depth: 0
+
+      - name: Build changelog
+        id: changelog
+        env:
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ runner.temp }}/release-notes.md
+        run: |
+          set -euo pipefail
+
+          # Nearest tag reachable from the parent of the tagged commit.
+          # Empty on the very first release.
+          PREV="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+
+          : > "$NOTES"
+
+          # An annotated tag's message becomes the release intro.
+          if [ "$(git cat-file -t "$TAG")" = "tag" ]; then
+            MESSAGE="$(git for-each-ref \
+              --format='%(contents:subject)%0a%0a%(contents:body)' \
+              "refs/tags/${TAG}")"
+            if printf '%s' "$MESSAGE" | grep -q '[^[:space:]]'; then
+              printf '%s\n\n' "$MESSAGE" >> "$NOTES"
+            fi
+          fi
+
+          if [ -n "$PREV" ]; then
+            RANGE="${PREV}..${TAG}"
+            printf '## Changes since %s\n\n' "$PREV" >> "$NOTES"
+          else
+            RANGE="$TAG"
+            printf '## Changes\n\n' >> "$NOTES"
+          fi
+
+          COMMITS="$(git log --no-merges --pretty=format:'- %s (`%h`)' "$RANGE")"
+          if [ -n "$COMMITS" ]; then
+            printf '%s\n' "$COMMITS" >> "$NOTES"
+          else
+            printf '_No new commits in this release._\n' >> "$NOTES"
+          fi
+
+          if [ -n "$PREV" ]; then
+            printf '\n**Full changelog**: %s/compare/%s...%s\n' \
+              "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" "$PREV" "$TAG" >> "$NOTES"
+          fi
+
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+          # Treat alpha/beta/rc/pre/dev tags as pre-releases.
+          if printf '%s' "$TAG" | grep -Eqi '(alpha|beta|rc|pre|dev)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo '----- release notes -----'
+          cat "$NOTES"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ steps.changelog.outputs.notes }}
+          PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          FLAGS=()
+          if [ "$PRERELEASE" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "$NOTES" \
+            "${FLAGS[@]}"
