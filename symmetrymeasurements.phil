@@ -15,6 +15,14 @@ symmetrymeasurements{
     exe_path = ''
       .type = str
       .help = Explicit path to the cosmochlore executable. Leave empty to search PATH.
+    cshm{
+      table = False
+        .type = bool
+        .help = Write a _cshm_table.csv file next to the .xyz.
+      ideal = False
+        .type = bool
+        .help = Write a _ideal.xyz file with the reconstructed reference shapes.
+    }
     csom{
       point_groups = ''
         .type = str
@@ -22,6 +30,29 @@ symmetrymeasurements{
       mode = 'auto'
         .type = str
         .help = Default centering mode for autoCSOM() (auto, first, centroid, manual).
+      vector = ''
+        .type = str
+        .help = Manual centering vector "x y z" (space-separated), used only when mode = manual.
+      full = False
+        .type = bool
+        .help = Write a per-operation _details.csv file for each point group.
+      table = False
+        .type = bool
+        .help = Write a _csom_table.csv summary file.
+      operated = False
+        .type = bool
+        .help = Write operated .xyz/.mol2 files showing each symmetry operation applied.
+      ignore_labels = False
+        .type = bool
+        .help = Ignore atom labels when matching atoms between structures.
+    }
+    odis{
+      full = False
+        .type = bool
+        .help = Also compute CShM (OC-6/TPR-6) and CSoM against common octahedral distortions.
+      table = False
+        .type = bool
+        .help = Write a _odis_table.csv file next to the .xyz.
     }
   }
 }
