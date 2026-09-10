@@ -92,7 +92,7 @@ def get_neighbours(atom_labels, orm=None):
     return neighbours_tags_list, unique_neighbours
 
 
-## DEBUG HELPERS - wired to the SymmetryMeasurements-debug GUI panel.
+## DEBUG HELPERS - wired to the Timaeus-debug GUI panel.
 def get_xyz_sel():
     """Prints and returns the coordinates of a single selected atom."""
     selection = olex.f('sel()')

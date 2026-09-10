@@ -7,7 +7,7 @@ This module finds the executable, version checks it,
 turning a MolecularStructure into the .xyz file it expects,
 building argv for each of its three subcommands, and running it.
 
-It knows nothing about Olex2's phil/param system (SymmetryMeasurements.py) will
+It knows nothing about Olex2's phil/param system (Timaeus.py) will
 read whatever settings they need and pass plain values to cosmochlore.py.
 """
 import os
@@ -75,7 +75,7 @@ def check_cosmochlore(configured_path=None):
     if exe is None or not os.path.exists(exe):
         if configured_path:
             raise CosmochloreError(
-                f'symmetrymeasurements.cosmochlore.exe_path is set to "{configured_path}", '
+                f'timaeus.cosmochlore.exe_path is set to "{configured_path}", '
                 f'but that file does not exist.')
         raise CosmochloreError(
             'cosmochlore executable not found on PATH. Get the latest version of cosmochlore from: '
