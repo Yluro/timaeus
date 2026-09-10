@@ -1,4 +1,5 @@
 import os
+import re
 
 import olex
 import olx
@@ -11,9 +12,7 @@ from reload_all import reload_all
 from autoshape import (ShapeCalculation, can_find_shape_msg, find_shape,
                        print_shape_table, run_shape)
 from constants import octadist_citation, shape21_citation
-from cosmochlore import (CosmochloreError, build_cshm_args, build_csom_args,
-                         build_odis_args, can_find_cosmochlore_msg, check_cosmochlore,
-                         run_cosmochlore, trim_banner, write_xyz)
+import cosmochlore
 from helper_functions import (get_neighbours, get_neighbours_on_sel, get_selected_atoms,
                               get_xyz_sel, print_console_bs, print_orm, test_selection_class, as_bool)
 from octahedral_distortion import CalcDistortion
@@ -93,6 +92,69 @@ def _cosmochlore_workdir():
     return path
 
 
+def _user_shapes_dir():
+    """Where autoCSHM()'s -r/--ref candidates are read from: a `user_shapes`
+    folder living next to the plugin's own code, alongside SHAPE's `custom_shapes`."""
+    return os.path.join(p_path, 'user_shapes')
+
+
+def _safe_key(name: str) -> str:
+    """Sanitises a shape's display name into a safe HTML control name / phil
+    param suffix - the display name itself (a .yaml filename the user chose)
+    isn't guaranteed to be free of spaces, quotes, or other characters that
+    would break the generated markup or a dotted phil path."""
+    return re.sub(r'[^A-Za-z0-9_-]', '_', name)
+
+
+def _user_shape_param(name: str) -> str:
+    return f'symmetrymeasurements.cosmochlore.cshm.user_shape.{_safe_key(name)}'
+
+
+def user_shapes_checkboxes_html():
+    """Returns one checkbox per .yaml file found in the user_shapes folder, for
+    picking which ones autoCSHM() passes to cshm's -r/--ref. Selection state is
+    stored per file (see _user_shape_param) rather than as one phil-declared
+    list, since the set of files - and so the set of possible param names - is
+    only known at runtime; this means it is not phil-persisted across Olex2
+    restarts, only for the current session.
+
+    Mirrors the table/tr/td structure gui/snippets/input-checkbox-td expands
+    to: the checkbox's own `label` attribute is not what renders visible text
+    in Olex2's control - the label is a separate <td><b>...</b></td> cell next
+    to it.
+    """
+    shapes = cosmochlore.list_user_shapes(_user_shapes_dir())
+    if not shapes:
+        return '<i>No .yaml files found.</i>'
+
+    rows = []
+    for name, _ in shapes:
+        param = _user_shape_param(name)
+        checked = 'true' if as_bool(OV.GetParam(param, False)) else 'false'
+        label = name.replace('"', "'")
+        rows.append(
+            f'<tr><td><input type="checkbox" name="UserShape_{_safe_key(name)}" '
+            f'checked="{checked}" '
+            f'onclick="spy.SetParam(\'{param}\', html.GetState(\'~name~\'))">'
+            f'</td><td align="left"><b>{label}</b></td></tr>'
+        )
+    return '<table cellpadding="0" cellspacing="0">' + ''.join(rows) + '</table>'
+
+
+def _selected_user_shapes():
+    """Full paths of the user_shapes .yaml files currently checked in the GUI."""
+    return [path for name, path in cosmochlore.list_user_shapes(_user_shapes_dir())
+           if as_bool(OV.GetParam(_user_shape_param(name), False))]
+
+
+def open_user_shapes_folder():
+    """Opens the user_shapes folder in the OS file browser. Creates it first
+    if it doesn't exist yet, so the button always has somewhere to open."""
+    path = _user_shapes_dir()
+    os.makedirs(path, exist_ok=True)
+    olx.Shell(path)
+
+
 # MAIN LOGIC FUNCTIONS.
 def autoSHAPE():
     print('\n' + '-' * 50)
@@ -161,21 +223,33 @@ def autoOCTADIST():
 _COSMOCHLORE_CREDIT = 'Computed using cosmochlore (https://github.com/Yluro/cosmochlore).'
 
 
-def autoCSHM(shapes=None, user_shapes=None, table=False, ideal=False):
+def autoCSHM(shapes=None, user_shapes=None, table=None, ideal=None):
     """Continuous Shape Measures via cosmochlore, on the current selection.
 
     `shapes`: built-in reference-shape indices to restrict to (None = all
     applicable for the detected vertex count). `user_shapes`: paths to
-    user-defined shape .yaml files. `table`/`ideal`: also write the
-    corresponding cosmochlore output files next to the .xyz.
+    user-defined shape .yaml files; when not given, falls back to whichever
+    files are checked in the user_shapes_checkboxes_html() GUI list. Passed to
+    cshm's -r/--ref exactly as given - no vertex-count pre-filtering, cosmochlore
+    reports a mismatch itself (aborting that part's run) rather than this
+    having any fallback logic of its own to hide the error.
+    `table`/`ideal`: also write the corresponding cosmochlore output files
+    next to the .xyz; default to the matching phil params when not given.
     """
     print('\n' + '-' * 50)
     print('Continuous Shape Measures using cosmochlore')
     try:
-        exe = check_cosmochlore(_cosmochlore_exe_path())
-    except CosmochloreError as e:
+        exe = cosmochlore.check_cosmochlore(_cosmochlore_exe_path())
+    except cosmochlore.CosmochloreError as e:
         print(e)
         return False
+
+    if user_shapes is None:
+        user_shapes = _selected_user_shapes() or None
+    if table is None:
+        table = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.cshm.table', False))
+    if ideal is None:
+        ideal = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.cshm.ideal', False))
 
     structures, centered = _prepare_structures(olex.f('sel()'))
     if structures is None:
@@ -185,13 +259,13 @@ def autoCSHM(shapes=None, user_shapes=None, table=False, ideal=False):
     ran_any = False
     for i, structure in enumerate(structures):
         xyz_path = os.path.join(workdir, f'{olx.FileName()}_{structure.labels[0]}_{i}.xyz')
-        write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
+        cosmochlore.write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
 
         try:
-            args = build_cshm_args(xyz_path, centered, shapes, user_shapes, table, ideal)
-            print(trim_banner(run_cosmochlore(exe, args, cwd=workdir)))
+            args = cosmochlore.build_cshm_args(xyz_path, centered, shapes, user_shapes, table, ideal)
+            print(cosmochlore.trim_banner(cosmochlore.run_cosmochlore(exe, args, cwd=workdir)))
             ran_any = True
-        except CosmochloreError as e:
+        except cosmochlore.CosmochloreError as e:
             print(f'cshm failed for part {i}: {e}')
 
     if ran_any:
@@ -199,21 +273,24 @@ def autoCSHM(shapes=None, user_shapes=None, table=False, ideal=False):
     return ran_any
 
 
-def autoCSOM(point_groups=None, mode=None, vector=None, full=False, table=False,
-            operated=False, samples=None, iterations=None, ignore_labels=False):
+def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
+            operated=None, samples=None, iterations=None, ignore_labels=None):
     """Continuous Symmetry Operation Measures via cosmochlore, on the current selection.
 
-    point_groups: a space-separated string or list of Schoenflies, fails back to the symmetrymeasurements.cosmochlore.csom.point_groups phil param when not given.
+    point_groups: a space-separated string or list of Schoenflies, falls back to the
+    symmetrymeasurements.cosmochlore.csom.point_groups phil param when not given.
 
     mode: centering mode (auto/first/centroid/manual), defaults to the matching phil param.
 
     `vector`: required 3-value centering vector when mode is 'manual'.
+
+    `full`/`table`/`operated`/`ignore_labels`: default to the matching phil params.
     """
     print('\n' + '-' * 50)
     print('Continuous Symmetry Operation Measures using cosmochlore')
     try:
-        exe = check_cosmochlore(_cosmochlore_exe_path())
-    except CosmochloreError as e:
+        exe = cosmochlore.check_cosmochlore(_cosmochlore_exe_path())
+    except cosmochlore.CosmochloreError as e:
         print(e)
         return False
 
@@ -230,6 +307,40 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=False, table=False,
 
     if mode is None:
         mode = OV.GetParam('symmetrymeasurements.cosmochlore.csom.mode', 'auto')
+    # Olex2's combo control capitalises the value it hands back (e.g. 'auto'
+    # -> 'Auto') regardless of the case used in the combo's own item list, so
+    # normalise here rather than trust whatever case arrives from the GUI or a
+    # console caller.
+    mode = str(mode).strip().lower()
+
+    if vector is None:
+        vector_str = OV.GetParam('symmetrymeasurements.cosmochlore.csom.vector', '')
+        if vector_str.strip():
+            try:
+                vector = [float(v) for v in vector_str.split()]
+            except ValueError:
+                print(f'Could not parse the manual centering vector "{vector_str}": '
+                      f'expected three numbers separated by spaces, e.g. "0.0 0.0 0.0".')
+                return False
+            if len(vector) != 3:
+                print(f'The manual centering vector needs exactly 3 numbers, '
+                      f'found {len(vector)} in "{vector_str}".')
+                return False
+
+    if mode == 'manual' and not vector:
+        print('Centering mode is "manual" but no centering vector was given. Set it in '
+              'the Cosmochlore section (x y z, space-separated), or pass '
+              "spy.SymmetryMeasurements.autoCSOM(vector=[x, y, z]).")
+        return False
+
+    if full is None:
+        full = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.full', False))
+    if table is None:
+        table = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.table', False))
+    if operated is None:
+        operated = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.operated', False))
+    if ignore_labels is None:
+        ignore_labels = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.csom.ignore_labels', False))
 
     structures, centered = _prepare_structures(olex.f('sel()'))
     if structures is None:
@@ -241,14 +352,14 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=False, table=False,
     ran_any = False
     for i, structure in enumerate(structures):
         xyz_path = os.path.join(workdir, f'{olx.FileName()}_{structure.labels[0]}_{i}.xyz')
-        write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
+        cosmochlore.write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
 
         try:
-            args = build_csom_args(xyz_path, centered, point_groups, mode, vector, full,
+            args = cosmochlore.build_csom_args(xyz_path, centered, point_groups, mode, vector, full,
                                    table, operated, samples, iterations, ignore_labels)
-            print(trim_banner(run_cosmochlore(exe, args, cwd=workdir)))
+            print(cosmochlore.trim_banner(cosmochlore.run_cosmochlore(exe, args, cwd=workdir)))
             ran_any = True
-        except CosmochloreError as e:
+        except cosmochlore.CosmochloreError as e:
             print(f'csom failed for part {i}: {e}')
 
     if ran_any:
@@ -256,19 +367,25 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=False, table=False,
     return ran_any
 
 
-def autoODIS(full=False, table=False):
+def autoODIS(full=None, table=None):
     """Octahedral distortion analysis via cosmochlore, on the current selection.
 
     Requires a single selected atom with exactly six neighbours (a 7-atom
-    polyhedron once its neighbours are added).
+    polyhedron once its neighbours are added). `full`/`table` default to the
+    matching phil params when not given.
     """
     print('\n' + '-' * 50)
     print('Octahedral distortion analysis using cosmochlore')
     try:
-        exe = check_cosmochlore(_cosmochlore_exe_path())
-    except CosmochloreError as e:
+        exe = cosmochlore.check_cosmochlore(_cosmochlore_exe_path())
+    except cosmochlore.CosmochloreError as e:
         print(e)
         return False
+
+    if full is None:
+        full = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.odis.full', False))
+    if table is None:
+        table = as_bool(OV.GetParam('symmetrymeasurements.cosmochlore.odis.table', False))
 
     sel_string = olex.f('sel()')
     if sel_string == '':
@@ -291,80 +408,18 @@ def autoODIS(full=False, table=False):
             continue
 
         xyz_path = os.path.join(workdir, f'{olx.FileName()}_{structure.labels[0]}_{i}.xyz')
-        write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
+        cosmochlore.write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
 
         try:
-            args = build_odis_args(xyz_path, full, table)
-            print(trim_banner(run_cosmochlore(exe, args, cwd=workdir)))
+            args = cosmochlore.build_odis_args(xyz_path, full, table)
+            print(cosmochlore.trim_banner(cosmochlore.run_cosmochlore(exe, args, cwd=workdir)))
             ran_any = True
-        except CosmochloreError as e:
+        except cosmochlore.CosmochloreError as e:
             print(f'odis failed for part {i}: {e}')
 
     if ran_any:
         print(_COSMOCHLORE_CREDIT)
     return ran_any
-
-
-def compare_odis():
-    """
-    Cross-checks the Python OctaDist reimplementation against cosmochlore's
-    odis on the current selection, printing both sets of results side by side.
-    Meant for validating the two engines agree, not for routine use.
-    """
-    sel_string = olex.f('sel()')
-    if sel_string == '':
-        print('Invalid atom selection: no atoms selected.')
-        return False
-
-    selection = AtomSelection(sel_string)
-    if len(selection) != 1:
-        print(f'Invalid atom selection: expected 1 atom, found {len(selection)}.')
-        return False
-    selection.add_neighbours()
-
-    try:
-        exe = check_cosmochlore(_cosmochlore_exe_path())
-    except CosmochloreError as e:
-        print(f'cosmochlore unavailable, showing Python results only: {e}')
-        exe = None
-
-    workdir = _cosmochlore_workdir()
-    # `key` names the field cosmochlore's odis CSV uses (see cosmochlore.read_odis_csv);
-    # CalcDistortion names its mean-bond-distance attribute differently, hence the alias.
-    rows = [('d_mean', 'mean_bond_distance', 'Mean d(M-X)', 'Ang'),
-            ('zeta', 'zeta', 'Zeta', 'Ang'), ('delta', 'delta', 'Delta', ''),
-            ('sigma', 'sigma', 'Sigma', 'deg'), ('theta', 'theta', 'Theta', 'deg'),
-            ('tau', 'tau', 'Tau', 'deg'), ('mu', 'mu', 'Mu', 'Ang')]
-
-    for i, structure in enumerate(split_by_parts(selection)):
-        if len(structure) != 7:
-            print(f'Skipping part {i}: expected 7 atoms, found {len(structure)}.')
-            continue
-
-        try:
-            python_result = CalcDistortion(structure)
-        except ValueError as e:
-            print(f'Python OctaDist failed for part {i}: {e}')
-            python_result = None
-
-        cosmo_values = {}
-        if exe:
-            xyz_path = os.path.join(workdir, f'{olx.FileName()}_{structure.labels[0]}_{i}_cmp.xyz')
-            write_xyz(structure, xyz_path, comment=f'{olx.FileName()} part {i}')
-            try:
-                run_cosmochlore(exe, build_odis_args(xyz_path, full=False, table=True), cwd=workdir)
-                cosmo_values = read_odis_csv(xyz_path)
-            except (CosmochloreError, OSError) as e:
-                print(f'cosmochlore odis failed for part {i}: {e}')
-
-        print(f'\n=== {structure.labels[0]}, part {i} ===')
-        print(f'{"":<14}{"Python":>12}{"cosmochlore":>14}   {"":<5}')
-        for key, py_attr, label, unit in rows:
-            py_val = getattr(python_result, py_attr) if python_result is not None else float('nan')
-            co_val = cosmo_values.get(key, float('nan'))
-            print(f'{label:<14}{py_val:>12.4f}{co_val:>14.4f}   {unit:<5}')
-
-    return True
 
 
 def shape_status_html():
@@ -373,6 +428,17 @@ def shape_status_html():
     color = OV.GetParam('gui.green') if found else OV.GetParam('gui.grey')
     text = f'SHAPE executable found at: {where}' if found else 'Unable to find shape.exe in the system path.'
     return f"<font color='{color}'>{text}</font>"
+
+
+def cosmochlore_status_html():
+    try:
+        exe = cosmochlore.check_cosmochlore(_cosmochlore_exe_path())
+    except cosmochlore.CosmochloreError as e:
+        return f"<font color='{OV.GetParam('gui.grey')}'>{e}</font>"
+
+    version = '.'.join(str(v) for v in cosmochlore.get_version(exe))
+    text = f'cosmochlore {version} found at: {exe}'
+    return f"<font color='{OV.GetParam('gui.green')}'>{text}</font>"
 
 
 class SymmetryMeasurements(PT):
@@ -394,12 +460,14 @@ class SymmetryMeasurements(PT):
         OV.registerFunction(can_find_shape_msg, True, "SymmetryMeasurements")
         OV.registerFunction(shape_status_html, False, 'SymmetryMeasurements')
 
-        # cosmochlore entry points (Phase 1: console-only, no GUI yet).
+        # cosmochlore entry points.
         OV.registerFunction(autoCSHM, True, "SymmetryMeasurements")
         OV.registerFunction(autoCSOM, True, "SymmetryMeasurements")
         OV.registerFunction(autoODIS, True, "SymmetryMeasurements")
-        OV.registerFunction(compare_odis, True, "SymmetryMeasurements")
-        OV.registerFunction(can_find_cosmochlore_msg, False, "SymmetryMeasurements")
+        OV.registerFunction(cosmochlore.can_find_cosmochlore_msg, False, "SymmetryMeasurements")
+        OV.registerFunction(cosmochlore_status_html, False, "SymmetryMeasurements")
+        OV.registerFunction(user_shapes_checkboxes_html, False, "SymmetryMeasurements")
+        OV.registerFunction(open_user_shapes_folder, True, "SymmetryMeasurements")
 
         # Debug panel helpers.
         OV.registerFunction(get_selected_atoms, True, "SymmetryMeasurements")
