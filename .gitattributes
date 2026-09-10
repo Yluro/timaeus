@@ -7,3 +7,5 @@ print_orm.txt  export-ignore
 todo.md        export-ignore
 olexFunctions.pyi export-ignore
 .gitattributes export-ignore
+.github export-ignore
+.gitignore export-ignore
