@@ -17,7 +17,7 @@ import shutil
 
 from selection import MolecularStructure
 
-MIN_VERSION = (1, 0, 2)
+MIN_VERSION = (1, 1, 0)
 
 # Point groups accepted by csom's -p/--pg flag, in Schoenflies notation.
 # Names are case-sensitive and must match one of these exactly.
