@@ -13,13 +13,12 @@ Timaeus is an [Olex2](https://www.olexsys.org/olex2/)$^1$ plugin that integrates
 
 ## Requirements
 - Olex2 1.5.
+- [cosmochlore](https://github.com/Yluro/cosmochlore) 1.1.1 or newer on your `PATH` (optional, needed for the Cosmochlore panel).
+  - The path can also be set explicitly in the plugin settings (`Extras` > `Settings`).
 - SHAPE 2.1 executable available on your system `PATH` (optional, needed for the SHAPE panel).
   - Download SHAPE 2.1 from the [Electronic Strucutre Group's webpage](https://www.ee.ub.edu/downloads/)
-- [cosmochlore](https://github.com/Yluro/cosmochlore) 1.0.2 or newer on your `PATH` (optional, needed for the Cosmochlore panel).
-  - The path can also be set explicitly in the plugin settings (`Extras` > `Settings`).
 
 The plugin was developed/tested using a Windows 10/11 machine. The plugin should be system agnostic but please report any bugs found in any other operating systems. 
-
 
 _**Note:** It is known that SHAPE 2.1 gives trouble in Mac machines with operating systems newer than 2022 and some Linux systems. Unfortunately, I can't do anything about that since the ESG hasn't published a precompiled SHAPE version since 2013. In the future I might introduce support for Cosymlib by ESG which is the updated version of their shape and symmetry measures program._
 
@@ -38,21 +37,50 @@ _**Note:** It is known that SHAPE 2.1 gives trouble in Mac machines with operati
 
 _**Note:** I push development changes constantly to the master branch. You could git clone this repository to automatically keep the plugin updated. Usually, if changes are pushed it means that the plugin is in a usable state. But it does not guarantee that things won't break._
 
-## AutoSHAPE
-[SHAPE 2.1](https://www.ee.ub.edu/continuous-shape-and-symmetry-measures/)$^2$ is a software published by ESG used to calculate Continuous Shape Measures (CShM's). autoSHAPE are a collection of personal Python scripts I developed and used to run and parse SHAPE i/o files. Timaeus contains an implementation of autoSHAPE to:
-- Generate the necessary `.dat` input files for SHAPE automatically.
-- Run SHAPE and parse the resulting `.tab` output.
-- Output a summary table from the `.out` and `.tab` files.
-SM's autoSHAPE does not overwrite previous runs as it stores each run in a dedicated folder: `<FilePath>\autoSHAPE\<FileName>_<part>_<atoms>\<run>`.
+
+
+### Usage
+1. Open a structure in Olex2.
+2. Select the central atom of a 6-coordinate complex.
+3. Run `spy.Timaeus.autoOCTADIST()` from the Olex2 console or from the Tools/Timaeus panel.
+4. Results are printed in the console. A graph will saved in `<FilePath>/OH_distortion` showing the extracted octahedron. 
+
+
+## Cosmochlore
+[cosmochlore](https://github.com/Yluro/cosmochlore) is a separate Rust program that calculates shape and symmetry measures. Timaeus wraps its three subcommands; each writes its output next to the structure and prints the results table to the console. Every option below has a phil parameter, editable in `Extras` > `Settings` or from the panel itself. Cosmochlore was intentionally developed to function as a background process to Timaeus. Most options of the program can be accessed through the GUI.
+
+| Function | Description |
+| --- | --- |
+| `spy.Timaeus.autoCSHM()` | Continuous Shape Measures against the built-in and user-defined reference polyhedra. |
+| `spy.Timaeus.autoCSOM()` | Continuous Symmetry Operation Measures against a list of point groups. |
+| `spy.Timaeus.autoODIS()` | Octahedral distortion parameters, independent of the OctaDist reimplementation below. Select the central atom of a 6-coordinate complex. |
 
 ### Usage
 
 1. Open a structure in Olex2.
 2. Select the atoms you want to include in the measurement.
- - If one atom is selected, the neighbouring atoms will be taken into account to form a centered shape (i.e. a coordination structure).
- - If multiple atoms are selected, the will be interpreted as a non centered shape (i.e. a borane cluster).
-4. Run `spy.Timaeus.autoSHAPE()` from the Olex2 console or from the Tools/Timaeus panel.
-5. Results are printed to the console and saved in `<FilePath>/autoSHAPE/`.
+ - If one atom is selected, the neighbouring atoms will be taken into account to form a centered shape (e.g. a coordination structure).
+ - If multiple atoms are selected, they will be interpreted as a non centered shape (e.g. a borane cluster).
+4. Run any of the cosmochlore functions from the Olex2 console or from the Tools/Timaeus/Cosmochlore panel.
+5. Results are printed to the console and saved in `<FilePath>/cosmochlore/`.
+
+
+
+### User-defined shapes
+Reference shapes beyond the built-in 90 can be added as `.yaml` files in the `user_shapes/` folder of the plugin (`Open user defined shapes folder` in the CShM panel). A mismatched vertex count is reported as an error by `cosmochlore` itself.
+
+## AutoSHAPE
+[SHAPE 2.1](https://www.ee.ub.edu/continuous-shape-and-symmetry-measures/)$^2$ is a software published by ESG used to calculate Continuous Shape Measures (CShM's). `autoSHAPE` is a collection of personal Python scripts I developed and used to run and parse SHAPE i/o files. Timaeus contains an implementation of `autoSHAPE` to:
+- Generate the necessary `.dat` input files for SHAPE automatically.
+- Run SHAPE and parse the resulting `.tab` output.
+- Output a summary table from the `.out` and `.tab` files.
+SM's autoSHAPE does not overwrite previous runs as it stores each run in a dedicated folder: `<FilePath>\autoSHAPE\<FileName>_<part>_<atoms>\<run>`.
+
+
+### Usage
+ 1. `autoSHAPE` uses the same selection criteria as `cosmochlore`. Select a single atom for a centered measurement or multiple for a non-centered one.
+ 2. Run `spy.Timaeus.autoSHAPE()` from the Olex2 command line or from the Tools/Timaeus/SHAPE 2.1 panel.
+
 
 #### _New in version 0.2_
 There is an option to merge pi-bonded ligands into a centroid. If checked, autoshape will interpret pi-bonded ligands as the average of the fragments as per Cirera _et al_$^2$ paper. 
@@ -101,26 +129,6 @@ where $\psi_i$ are the trans angles.
 ```
 where $\vec{r}_M$ is the position of the metal and $\vec{r}_i$ are the position of the donor atoms.
 
-
-
-### Usage
-1. Open a structure in Olex2.
-2. Select the central atom of a 6-coordinate complex.
-3. Run `spy.Timaeus.autoOCTADIST()` from the Olex2 console or from the Tools/Timaeus panel.
-4. Results are printed in the console. A graph will saved in `<FilePath>/OH_distortion` showing the extracted octahedron. 
-
-
-## Cosmochlore
-[cosmochlore](https://github.com/Yluro/cosmochlore) is a separate Rust program that calculates shape and symmetry measures. Timaeus wraps its three subcommands; each writes its output next to the structure and prints the results table to the console. Every option below has a phil parameter, editable in `Extras` > `Settings` or from the panel itself.
-
-| Function | Description |
-| --- | --- |
-| `spy.Timaeus.autoCSHM()` | Continuous Shape Measures against the built-in and user-defined reference polyhedra. Same selection rule as autoSHAPE. |
-| `spy.Timaeus.autoCSOM()` | Continuous Symmetry Operation Measures against a list of point groups (space-separated Schoenflies symbols, e.g. `Oh D4h D3d`). Slower than CShM/ODis. |
-| `spy.Timaeus.autoODIS()` | Octahedral distortion parameters, independent of the OctaDist reimplementation above. Select the central atom of a 6-coordinate complex. |
-
-### User-defined shapes
-Reference shapes beyond the built-in 90 can be added as `.yaml` files in the `user_shapes/` folder of the plugin (`Open user defined shapes folder` in the CShM panel). Each file gets a checkbox; only the checked ones are used. A mismatched vertex count is reported by cosmochlore itself.
 
 ## Known limitations/upcoming features.
 
