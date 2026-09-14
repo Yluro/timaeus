@@ -4,11 +4,11 @@ Timaeus is an [Olex2](https://www.olexsys.org/olex2/)$^1$ plugin that integrates
 ### Features
 - All analysis methods in Timaeus will read the atomic coordinates directly from the `OlexRefinementModel` — no external input files needed.
 - Olex2 GUI panel.
+- [Cosmochlore](https://github.com/Yluro/cosmochlore) integration: Continuous Shape Measures, Continuous Symmetry Operation Measures and octahedral distortion.
 - SHAPE 2.1 wrapper and output parser.
 - Octahedral distortion parameters calculation.
-- [Cosmochlore](https://github.com/Yluro/cosmochlore) integration: Continuous Shape Measures, Continuous Symmetry Operation Measures and octahedral distortion.
-- Centroid merging for pi-bonded ligands
-- Automatic disorder handling. If more than two parts are found in the selected strucutre, calculations will be run on each part separately. 
+- Centroid merging for pi-bonded ligands.
+- Automatic disorder handling. If more than two parts are found in the selected structure, calculations will be run on each part separately. 
 
 
 ## Requirements
