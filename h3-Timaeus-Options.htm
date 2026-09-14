@@ -1,0 +1,13 @@
+<!-- #include tool-h3 gui\blocks\tool-h3.htm;image=#image;colspan=1;1; -->
+
+<!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=Options_1; help_ext=Options_1;1; -->
+  <td align='right' width="30%"><b>Merge pi-bonded ligands: </b></td>
+    $+
+      html.Snippet("gui/snippets/input-checkbox-td",
+      "name=MERGE",
+      "checked=spy.GetParam('timaeus.merge_ligands', False)",
+      "onclick=spy.SetParam('timaeus.merge_ligands', html.GetState('~name~'))>>labels -rn",
+      "td1=<td align='left' width="4%">"
+      )
+    $-
+<!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
