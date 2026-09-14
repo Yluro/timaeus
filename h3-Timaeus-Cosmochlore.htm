@@ -20,20 +20,20 @@
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CShM_2; help_ext=CShM_2;1; -->
-  <td align='left' width="100%"><b>Options:</b></td>
+  <td align='left' width="100%"><b>CShM Options:</b></td>
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CShM_3; help_ext=CShM_3;1; -->
-  <td align='right' width="20%"><b>Results CSV: </b></td>
+  <td align='left' width="15%"><b>Results .csv: </b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=CSHM_TABLE",
       "checked=spy.GetParam('timaeus.cosmochlore.cshm.table', False)",
       "onclick=spy.SetParam('timaeus.cosmochlore.cshm.table', html.GetState('~name~'))",
-      "td1=<td align='left' width="15%">"
+      "td1=<td align='left' width="5%">"
       )
     $-
-  <td align='right' width="25%"><b>Ideal Polyhedra XYZ: </b></td>
+  <td align='left' width="23%"><b>Ideal polyhedra .xyz: </b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=CSHM_IDEAL",
@@ -77,11 +77,11 @@
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_2; help_ext=CSoM_2;1; -->
-  <td align='left' width="100%"><b>Options:</b></td>
+  <td align='left' width="100%"><b>CSoM Options:</b></td>
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_3; help_ext=CSoM_3;1; -->
-  <td align='right' width="20%"><b>Point groups: </b></td>
+  <td align='left' width="16%"><b>Point groups: </b></td>
     $+
       html.Snippet("gui/snippets/input-text-td",
       "name=CSOM_PG",
@@ -94,7 +94,7 @@
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_4; help_ext=CSoM_4;1; -->
-  <td align='right' width="15%"><b>Centering mode: </b></td>
+  <td align='left' width="20%"><b>Centering mode: </b></td>
   <td align='left' width="15%">
     $+
       html.Snippet("gui/snippets/input-combo",
@@ -106,6 +106,7 @@
       )
     $-
   </td>
+  <td align='left' width="5%"></td>
   <td align='right' width="25%"><b>Manual vector (x y z): </b></td>
     $+
       html.Snippet("gui/snippets/input-text-td",
@@ -119,47 +120,46 @@
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_5; help_ext=CSoM_5;1; -->
-  <td align='right' width="20%"><b>Summary CSV: </b></td>
+  <td align='left' width="17%"><b>Summary .csv: </b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=CSOM_TABLE",
       "checked=spy.GetParam('timaeus.cosmochlore.csom.table', False)",
       "onclick=spy.SetParam('timaeus.cosmochlore.csom.table', html.GetState('~name~'))",
-      "td1=<td align='left' width="15%">"
+      "td1=<td align='left'>"
       )
     $-
-  <td align='right' width="30%"><b>Per-operation details CSV: </b></td>
+  <td align='left' width="32%"><b>Per-operation details .csv:</b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=CSOM_FULL",
       "checked=spy.GetParam('timaeus.cosmochlore.csom.full', False)",
       "onclick=spy.SetParam('timaeus.cosmochlore.csom.full', html.GetState('~name~'))",
-      "td1=<td align='left' width="15%">"
+      "td1=<td align='left'>"
       )
     $-
-  <td align='right' width="10%"></td>
-<!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
-
-<!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_6; help_ext=CSoM_6;1; -->
-  <td align='right' width="20%"><b>Operated .xyz/.mol2: </b></td>
+  <td align='left' width="25%"><b>Operated .xyz/.mol2:</b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=CSOM_OPERATED",
       "checked=spy.GetParam('timaeus.cosmochlore.csom.operated', False)",
       "onclick=spy.SetParam('timaeus.cosmochlore.csom.operated', html.GetState('~name~'))",
-      "td1=<td align='left' width="15%">"
+      "td1=<td align='left'>"
       )
     $-
-  <td align='right' width="25%"><b>Ignore atom labels: </b></td>
+<!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
+
+<!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_6; help_ext=CSoM_6;1; -->
+  <td align='left' width="22%"><b>Ignore atom labels:</b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=CSOM_IGNORE_LABELS",
       "checked=spy.GetParam('timaeus.cosmochlore.csom.ignore_labels', False)",
       "onclick=spy.SetParam('timaeus.cosmochlore.csom.ignore_labels', html.GetState('~name~'))",
-      "td1=<td align='left' width="15%">"
+      "td1=<td align='left' width="50%">"
       )
     $-
-  <td align='right' width="10%"></td>
+  <td align='right' width="50%"></td>
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 
@@ -176,20 +176,20 @@
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=ODis_2; help_ext=ODis_2;1; -->
-  <td align='left' width="100%"><b>Options:</b></td>
+  <td align='left' width="100%"><b>ODis Options:</b></td>
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=ODis_3; help_ext=ODis_3;1; -->
-  <td align='right' width="20%"><b>Results CSV: </b></td>
+  <td align='Left' width="15%"><b>Results .csv:</b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=ODIS_TABLE",
       "checked=spy.GetParam('timaeus.cosmochlore.odis.table', False)",
       "onclick=spy.SetParam('timaeus.cosmochlore.odis.table', html.GetState('~name~'))",
-      "td1=<td align='left' width="15%">"
+      "td1=<td align='left' width="5%">"
       )
     $-
-  <td align='right' width="20%"><b>Full analysis: </b></td>
+  <td align='Left' width="15%"><b>Full analysis:</b></td>
     $+
       html.Snippet("gui/snippets/input-checkbox-td",
       "name=ODIS_FULL",
