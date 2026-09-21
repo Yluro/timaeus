@@ -37,15 +37,6 @@ _**Note:** It is known that SHAPE 2.1 gives trouble in Mac machines with operati
 
 _**Note:** I push development changes constantly to the master branch. You could git clone this repository to automatically keep the plugin updated. Usually, if changes are pushed it means that the plugin is in a usable state. But it does not guarantee that things won't break._
 
-
-
-### Usage
-1. Open a structure in Olex2.
-2. Select the central atom of a 6-coordinate complex.
-3. Run `spy.Timaeus.autoOCTADIST()` from the Olex2 console or from the Tools/Timaeus panel.
-4. Results are printed in the console. A graph will saved in `<FilePath>/OH_distortion` showing the extracted octahedron. 
-
-
 ## Cosmochlore
 [cosmochlore](https://github.com/Yluro/cosmochlore) is a separate Rust program that calculates shape and symmetry measures. Timaeus wraps its three subcommands; each writes its output next to the structure and prints the results table to the console. Every option below has a phil parameter, editable in `Extras` > `Settings` or from the panel itself. Cosmochlore was intentionally developed to function as a background process to Timaeus. Most options of the program can be accessed through the GUI.
 
@@ -128,6 +119,13 @@ where $\psi_i$ are the trans angles.
 \mu = |\vec{r}_M - \vec{c}|
 ```
 where $\vec{r}_M$ is the position of the metal and $\vec{r}_i$ are the position of the donor atoms.
+
+
+### Usage
+1. Open a structure in Olex2.
+2. Select the central atom of a 6-coordinate complex.
+3. Run `spy.Timaeus.autoOCTADIST()` from the Olex2 console or from the Tools/Timaeus panel.
+4. Results are printed in the console. A graph will saved in `<FilePath>/OH_distortion` showing the extracted octahedron. 
 
 
 ## Known limitations/upcoming features.
