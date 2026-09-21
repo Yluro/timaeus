@@ -380,7 +380,8 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
 
         try:
             args = cosmochlore.build_csom_args(xyz_path, centered, point_groups, mode, vector, full,
-                                   table, operated, samples, iterations, ignore_labels)
+                                               table, operated, seeds, iterations, tolerance,
+                                               ignore_labels)
             print(cosmochlore.trim_banner(cosmochlore.run_cosmochlore(exe, args, cwd=workdir)))
             ran_any = True
         except cosmochlore.CosmochloreError as e:
