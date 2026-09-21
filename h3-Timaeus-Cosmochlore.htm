@@ -162,6 +162,43 @@
   <td align='right' width="50%"></td>
 <!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
 
+<!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=CSoM_7; help_ext=CSoM_7;1; -->
+  <td align='left' width="10%"><b>Seeds: </b></td>
+    $+
+      html.Snippet("gui/snippets/input-spin-td",
+      "name=CSOM_SEEDS",
+      "value=spy.GetParam('timaeus.cosmochlore.csom.seeds')",
+      "onchange=spy.SetParam('timaeus.cosmochlore.csom.seeds', html.GetValue('~name~'))",
+      "min=1",
+      "max=1000",
+      "td1=<td align='left' width="13%">"
+      )
+    $-
+  <td align='right' width="17%"><b>Iterations: </b></td>
+    $+
+      html.Snippet("gui/snippets/input-spin-td",
+      "name=CSOM_ITERATIONS",
+      "value=spy.GetParam('timaeus.cosmochlore.csom.iterations')",
+      "onchange=spy.SetParam('timaeus.cosmochlore.csom.iterations', html.GetValue('~name~'))",
+      "min=1",
+      "max=10000",
+      "td1=<td align='left' width="15%">"
+      )
+    $-
+  <td align='right' width="21%"><b>Tolerance: 1e-</b></td>
+    $+
+      html.Snippet("gui/snippets/input-spin-td",
+      "name=CSOM_TOLERANCE_EXPONENT",
+      "value=spy.GetParam('timaeus.cosmochlore.csom.tolerance_exponent')",
+      "onchange=spy.SetParam('timaeus.cosmochlore.csom.tolerance_exponent', html.GetValue('~name~'))",
+      "min=1",
+      "max=15",
+      "td1=<td align='left' width="11%">"
+      )
+    $-
+  <td width="13%"></td>
+<!-- #include row_table_off gui/blocks/row_table_off.htm;1; -->
+
 
 <!-- #include tool-row-help gui/blocks/tool-row-help.htm;name=ODis; help_ext=ODis;1; -->
   <td align='left' width="100%"><b><u>Octahedral Distortion Parameters</u></b></td>

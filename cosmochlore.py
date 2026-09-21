@@ -175,11 +175,10 @@ def build_cshm_args(xyz_path, centered, shapes=None, user_shapes=None,
 
 
 def build_csom_args(xyz_path, centered, point_groups, mode='auto', vector=None,
-                    full=False, table=False, operated=False, samples=None,
-                    iterations=None, ignore_labels=False):
+                    full=False, table=False, operated=False, seeds=None,
+                    iterations=None, tolerance=None, ignore_labels=False):
     """Builds argv for `cosmochlore csom`. Validates `point_groups` and `mode`
-    itself and raises CosmochloreError on anything invalid, since an empty
-    --pg makes cosmochlore panic (todo!()) instead of erroring cleanly."""
+    itself and raises CosmochloreError on anything invalid."""
     if not point_groups:
         raise CosmochloreError('csom requires at least one point group.')
 
@@ -194,6 +193,12 @@ def build_csom_args(xyz_path, centered, point_groups, mode='auto', vector=None,
     if mode == 'manual' and not vector:
         raise CosmochloreError('centering mode "manual" requires a 3-value vector.')
 
+    # cosmochlore accepts 0 for any of these and quietly returns an unrefined
+    # (wrong) deviation instead of erroring.
+    for name, value in (('seeds', seeds), ('iterations', iterations), ('tolerance', tolerance)):
+        if value is not None and not value > 0:
+            raise CosmochloreError(f'csom {name} must be greater than 0, got {value!r}.')
+
     args = ['csom', xyz_path] + _centering_args(centered)
     args += ['-p'] + list(point_groups)
     args += ['-m', mode]
@@ -206,10 +211,12 @@ def build_csom_args(xyz_path, centered, point_groups, mode='auto', vector=None,
         args.append('-t')
     if operated:
         args.append('-o')
-    if samples is not None:
-        args += ['-s', str(samples)]
+    if seeds is not None:
+        args += ['-s', str(seeds)]
     if iterations is not None:
         args += ['-i', str(iterations)]
+    if tolerance is not None:
+        args += ['-T', f'{tolerance:g}']
     if ignore_labels:
         args.append('-g')
 

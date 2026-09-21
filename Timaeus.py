@@ -285,7 +285,8 @@ def autoCSHM(shapes=None, user_shapes=None, table=None, ideal=None):
 
 
 def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
-            operated=None, samples=None, iterations=None, ignore_labels=None):
+            operated=None, seeds=None, iterations=None, tolerance=None,
+            ignore_labels=None):
     """Continuous Symmetry Operation Measures via cosmochlore, on the current selection.
 
     point_groups: a space-separated string or list of Schoenflies, falls back to the
@@ -296,6 +297,11 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
     `vector`: required 3-value centering vector when mode is 'manual'.
 
     `full`/`table`/`operated`/`ignore_labels`: default to the matching phil params.
+
+    `seeds`/`iterations`/`tolerance`: the axis-search knobs (cosmochlore's
+    -s/--seeds, -i/--iterations and -T/--tolerance), defaulting to the matching phil
+    params. `tolerance` is the value itself (e.g. 1e-7); the phil param behind
+    it - and the GUI's spin box - hold the exponent N of a 1e-N tolerance.
     """
     print('\n' + '-' * 50)
     print('Continuous Symmetry Operation Measures using cosmochlore')
@@ -352,6 +358,13 @@ def autoCSOM(point_groups=None, mode=None, vector=None, full=None, table=None,
         operated = as_bool(OV.GetParam('timaeus.cosmochlore.csom.operated', False))
     if ignore_labels is None:
         ignore_labels = as_bool(OV.GetParam('timaeus.cosmochlore.csom.ignore_labels', False))
+
+    if seeds is None:
+        seeds = OV.GetParam('timaeus.cosmochlore.csom.seeds', 20)
+    if iterations is None:
+        iterations = OV.GetParam('timaeus.cosmochlore.csom.iterations', 200)
+    if tolerance is None:
+        tolerance = 10.0 ** -OV.GetParam('timaeus.cosmochlore.csom.tolerance_exponent', 6)
 
     structures, centered = _prepare_structures(olex.f('sel()'))
     if structures is None:

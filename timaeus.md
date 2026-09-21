@@ -127,6 +127,15 @@ Also saves the structure with each symmetry operation applied.
 ##Ignore atom labels
 Match atoms by position only, ignoring element/label.
 
+#CSoM 7
+Axis-search settings (cosmochlore's **--seeds**, **--iterations** and **--tolerance**). It is recommended not to change them.
+##Seeds
+Number of candidate symmetry-axis directions, spread over a Fibonacci hemisphere, that seed the search. Each one is refined at every in-plane orientation the point group tells apart. Default **20**.
+##Iterations
+Maximum number of Nelder-Mead iterations spent refining each seed. Default **200**.
+##Tolerance
+Convergence tolerance of the Nelder-Mead refinement, as a power of ten: the box holds **N** for a tolerance of **1e-N**. Default **6** (1e-6).
+
 #ODis
 Octahedral Distortion Parameters: a second, independent octahedral distortion implementation, via cosmochlore. Select the central atom of a 6-coordinate complex.
 

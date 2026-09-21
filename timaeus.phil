@@ -45,6 +45,15 @@ timaeus{
       ignore_labels = False
         .type = bool
         .help = Ignore atom labels when matching atoms between structures.
+      seeds = 20
+        .type = int(value_min=1, value_max=1000)
+        .help = Number of candidate symmetry-axis directions (Fibonacci hemisphere) that seed the csom axis search. The cosmochlore default is 20.
+      iterations = 200
+        .type = int(value_min=1, value_max=10000)
+        .help = Maximum number of Nelder-Mead iterations spent refining each seed. The cosmochlore default is 200.
+      tolerance_exponent = 6
+        .type = int(value_min=1, value_max=15)
+        .help = Convergence tolerance of the Nelder-Mead refinement as a power of ten, N meaning 1e-N. The cosmochlore default is 6 (1e-6).
     }
     odis{
       full = False
